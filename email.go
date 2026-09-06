@@ -32,7 +32,7 @@ func (app *App) sendTriggerEmail(recipients []Recipient, secrets []Secret, docum
 	body.WriteString("このメールは、久延毘古（くえびこ）が作動したため自動送信されています。\n\n")
 	body.WriteString("送信者が設定した期限までに生存確認が行われなかったため、登録されていた情報をお送りします。\n\n")
 	body.WriteString("==================================================\n")
-	 body.WriteString("【金融情報 / シークレット】\n")
+	body.WriteString("【金融情報 / シークレット】\n")
 	body.WriteString("==================================================\n\n")
 	if len(secrets) == 0 {
 		body.WriteString("登録されているシークレットはありません。\n\n")
