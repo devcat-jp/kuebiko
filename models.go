@@ -33,9 +33,10 @@ type SMTPSettings struct {
 
 // Recipient receives the kuebiko payload.
 type Recipient struct {
-	ID    int64
-	Email string
-	Name  string
+	ID        int64
+	Email     string
+	Name      string
+	SortOrder int
 }
 
 // Secret stores login credentials or other sensitive information.
@@ -45,6 +46,7 @@ type Secret struct {
 	Content   string // encrypted JSON of SecretPayload
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	SortOrder int
 }
 
 // SecretPayload is the structured content of a Secret.
@@ -109,6 +111,7 @@ type Document struct {
 	Content   string // markdown, encrypted at rest
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	SortOrder int
 }
 
 // AppData is passed to templates.

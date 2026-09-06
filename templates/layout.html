@@ -44,6 +44,58 @@
                 button.textContent = '表示';
             }
         }
+
+        (function () {
+            function initSortableTable(table) {
+                var tbody = table.querySelector('tbody');
+                if (!tbody) return;
+                var draggedRow = null;
+                var rows = tbody.querySelectorAll('tr[draggable="true"]');
+
+                rows.forEach(function (row) {
+                    row.addEventListener('dragstart', function (e) {
+                        draggedRow = row;
+                        row.classList.add('dragging');
+                        e.dataTransfer.effectAllowed = 'move';
+                    });
+                    row.addEventListener('dragend', function () {
+                        row.classList.remove('dragging');
+                        draggedRow = null;
+                        saveOrder(table);
+                    });
+                    row.addEventListener('dragover', function (e) {
+                        e.preventDefault();
+                        if (!draggedRow || draggedRow === row) return;
+                        var rect = row.getBoundingClientRect();
+                        var next = (e.clientY - rect.top) / (rect.bottom - rect.top) > 0.5;
+                        if (next) {
+                            tbody.insertBefore(draggedRow, row.nextSibling);
+                        } else {
+                            tbody.insertBefore(draggedRow, row);
+                        }
+                    });
+                });
+            }
+
+            function saveOrder(table) {
+                var url = table.getAttribute('data-reorder-url');
+                if (!url) return;
+                var rows = table.querySelectorAll('tbody tr[draggable="true"]');
+                var params = new URLSearchParams();
+                rows.forEach(function (row) {
+                    params.append('id', row.getAttribute('data-id'));
+                });
+                fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: params.toString()
+                }).catch(function (err) {
+                    console.error('並び順の保存に失敗しました', err);
+                });
+            }
+
+            document.querySelectorAll('.sortable-table').forEach(initSortableTable);
+        })();
     </script>
 </body>
 </html>

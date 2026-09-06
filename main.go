@@ -91,18 +91,21 @@ func main() {
 	mux.HandleFunc("/recipients/new", app.authMiddleware(app.recipientNewHandler))
 	mux.HandleFunc("/recipients/edit", app.authMiddleware(app.recipientEditHandler))
 	mux.HandleFunc("/recipients/delete", app.authMiddleware(app.recipientDeleteHandler))
+	mux.HandleFunc("/recipients/reorder", app.authMiddleware(app.recipientsReorderHandler))
 
 	mux.HandleFunc("/secrets", app.authMiddleware(app.secretsHandler))
 	mux.HandleFunc("/secrets/new", app.authMiddleware(app.secretNewHandler))
 	mux.HandleFunc("/secrets/edit", app.authMiddleware(app.secretEditHandler))
 	mux.HandleFunc("/secrets/delete", app.authMiddleware(app.secretDeleteHandler))
 	mux.HandleFunc("/secrets/view", app.authMiddleware(app.secretViewHandler))
+	mux.HandleFunc("/secrets/reorder", app.authMiddleware(app.secretsReorderHandler))
 
 	mux.HandleFunc("/documents", app.authMiddleware(app.documentsHandler))
 	mux.HandleFunc("/documents/new", app.authMiddleware(app.documentNewHandler))
 	mux.HandleFunc("/documents/edit", app.authMiddleware(app.documentEditHandler))
 	mux.HandleFunc("/documents/delete", app.authMiddleware(app.documentDeleteHandler))
 	mux.HandleFunc("/documents/preview", app.authMiddleware(app.documentPreviewHandler))
+	mux.HandleFunc("/documents/reorder", app.authMiddleware(app.documentsReorderHandler))
 
 	handler := ipFilter(mux, db)
 
@@ -599,6 +602,26 @@ func (app *App) recipientDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/recipients", http.StatusSeeOther)
 }
 
+func (app *App) recipientsReorderHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+	ids := r.Form["id"]
+	for i, idStr := range ids {
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			continue
+		}
+		_ = app.db.UpdateRecipientSortOrder(id, i)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // Secrets handlers.
 func (app *App) secretsHandler(w http.ResponseWriter, r *http.Request) {
 	list, _ := app.db.ListSecrets()
@@ -729,6 +752,26 @@ func (app *App) secretDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/secrets", http.StatusSeeOther)
 }
 
+func (app *App) secretsReorderHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+	ids := r.Form["id"]
+	for i, idStr := range ids {
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			continue
+		}
+		_ = app.db.UpdateSecretSortOrder(id, i)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // Documents handlers.
 func (app *App) documentsHandler(w http.ResponseWriter, r *http.Request) {
 	list, _ := app.db.ListDocuments()
@@ -794,6 +837,26 @@ func (app *App) documentDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		setFlash(w, "ドキュメントを削除しました", "success")
 	}
 	http.Redirect(w, r, "/documents", http.StatusSeeOther)
+}
+
+func (app *App) documentsReorderHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+	ids := r.Form["id"]
+	for i, idStr := range ids {
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			continue
+		}
+		_ = app.db.UpdateDocumentSortOrder(id, i)
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (app *App) documentPreviewHandler(w http.ResponseWriter, r *http.Request) {

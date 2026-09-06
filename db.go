@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS smtp_settings (
 CREATE TABLE IF NOT EXISTS recipients (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	email TEXT NOT NULL UNIQUE,
-	name TEXT
+	name TEXT,
+	sort_order INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS secrets (
@@ -74,7 +75,8 @@ CREATE TABLE IF NOT EXISTS secrets (
 	title TEXT NOT NULL,
 	content TEXT NOT NULL,
 	created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	sort_order INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS documents (
@@ -82,7 +84,8 @@ CREATE TABLE IF NOT EXISTS documents (
 	title TEXT NOT NULL,
 	content TEXT NOT NULL,
 	created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	sort_order INTEGER NOT NULL DEFAULT 0
 );
 `
 	if _, err := db.conn.Exec(schema); err != nil {
@@ -284,7 +287,7 @@ func (db *DB) SaveSMTPSettings(s *SMTPSettings) error {
 
 // Recipient helpers.
 func (db *DB) ListRecipients() ([]Recipient, error) {
-	rows, err := db.conn.Query("SELECT id, email, name FROM recipients ORDER BY id")
+	rows, err := db.conn.Query("SELECT id, email, name, sort_order FROM recipients ORDER BY sort_order, id")
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +295,7 @@ func (db *DB) ListRecipients() ([]Recipient, error) {
 	var list []Recipient
 	for rows.Next() {
 		r := Recipient{}
-		if err := rows.Scan(&r.ID, &r.Email, &r.Name); err != nil {
+		if err := rows.Scan(&r.ID, &r.Email, &r.Name, &r.SortOrder); err != nil {
 			return nil, err
 		}
 		list = append(list, r)
@@ -302,7 +305,7 @@ func (db *DB) ListRecipients() ([]Recipient, error) {
 
 func (db *DB) GetRecipient(id int64) (*Recipient, error) {
 	r := &Recipient{}
-	err := db.conn.QueryRow("SELECT id, email, name FROM recipients WHERE id = ?", id).Scan(&r.ID, &r.Email, &r.Name)
+	err := db.conn.QueryRow("SELECT id, email, name, sort_order FROM recipients WHERE id = ?", id).Scan(&r.ID, &r.Email, &r.Name, &r.SortOrder)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -310,12 +313,17 @@ func (db *DB) GetRecipient(id int64) (*Recipient, error) {
 }
 
 func (db *DB) CreateRecipient(email, name string) error {
-	_, err := db.conn.Exec("INSERT INTO recipients (email, name) VALUES (?, ?)", email, name)
+	_, err := db.conn.Exec("INSERT INTO recipients (email, name, sort_order) VALUES (?, ?, COALESCE((SELECT MAX(sort_order)+1 FROM recipients), 0))", email, name)
 	return err
 }
 
 func (db *DB) UpdateRecipient(id int64, email, name string) error {
 	_, err := db.conn.Exec("UPDATE recipients SET email = ?, name = ? WHERE id = ?", email, name, id)
+	return err
+}
+
+func (db *DB) UpdateRecipientSortOrder(id int64, sortOrder int) error {
+	_, err := db.conn.Exec("UPDATE recipients SET sort_order = ? WHERE id = ?", sortOrder, id)
 	return err
 }
 
@@ -326,7 +334,7 @@ func (db *DB) DeleteRecipient(id int64) error {
 
 // Secret helpers (encrypted at rest).
 func (db *DB) ListSecrets() ([]Secret, error) {
-	rows, err := db.conn.Query("SELECT id, title, content, created_at, updated_at FROM secrets ORDER BY updated_at DESC")
+	rows, err := db.conn.Query("SELECT id, title, content, created_at, updated_at, sort_order FROM secrets ORDER BY sort_order, id")
 	if err != nil {
 		return nil, err
 	}
@@ -335,7 +343,7 @@ func (db *DB) ListSecrets() ([]Secret, error) {
 	for rows.Next() {
 		s := Secret{}
 		var ct string
-		if err := rows.Scan(&s.ID, &s.Title, &ct, &s.CreatedAt, &s.UpdatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.Title, &ct, &s.CreatedAt, &s.UpdatedAt, &s.SortOrder); err != nil {
 			return nil, err
 		}
 		pt, err := decrypt(ct, db.key)
@@ -352,7 +360,7 @@ func (db *DB) ListSecrets() ([]Secret, error) {
 func (db *DB) GetSecret(id int64) (*Secret, error) {
 	s := &Secret{}
 	var ct string
-	err := db.conn.QueryRow("SELECT id, title, content, created_at, updated_at FROM secrets WHERE id = ?", id).Scan(&s.ID, &s.Title, &ct, &s.CreatedAt, &s.UpdatedAt)
+	err := db.conn.QueryRow("SELECT id, title, content, created_at, updated_at, sort_order FROM secrets WHERE id = ?", id).Scan(&s.ID, &s.Title, &ct, &s.CreatedAt, &s.UpdatedAt, &s.SortOrder)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -372,7 +380,7 @@ func (db *DB) CreateSecret(title, content string) error {
 	if err != nil {
 		return err
 	}
-	_, err = db.conn.Exec("INSERT INTO secrets (title, content) VALUES (?, ?)", title, ct)
+	_, err = db.conn.Exec("INSERT INTO secrets (title, content, sort_order) VALUES (?, ?, COALESCE((SELECT MAX(sort_order)+1 FROM secrets), 0))", title, ct)
 	return err
 }
 
@@ -385,6 +393,11 @@ func (db *DB) UpdateSecret(id int64, title, content string) error {
 	return err
 }
 
+func (db *DB) UpdateSecretSortOrder(id int64, sortOrder int) error {
+	_, err := db.conn.Exec("UPDATE secrets SET sort_order = ? WHERE id = ?", sortOrder, id)
+	return err
+}
+
 func (db *DB) DeleteSecret(id int64) error {
 	_, err := db.conn.Exec("DELETE FROM secrets WHERE id = ?", id)
 	return err
@@ -392,7 +405,7 @@ func (db *DB) DeleteSecret(id int64) error {
 
 // Document helpers (encrypted at rest).
 func (db *DB) ListDocuments() ([]Document, error) {
-	rows, err := db.conn.Query("SELECT id, title, content, created_at, updated_at FROM documents ORDER BY updated_at DESC")
+	rows, err := db.conn.Query("SELECT id, title, content, created_at, updated_at, sort_order FROM documents ORDER BY sort_order, id")
 	if err != nil {
 		return nil, err
 	}
@@ -401,7 +414,7 @@ func (db *DB) ListDocuments() ([]Document, error) {
 	for rows.Next() {
 		d := Document{}
 		var ct string
-		if err := rows.Scan(&d.ID, &d.Title, &ct, &d.CreatedAt, &d.UpdatedAt); err != nil {
+		if err := rows.Scan(&d.ID, &d.Title, &ct, &d.CreatedAt, &d.UpdatedAt, &d.SortOrder); err != nil {
 			return nil, err
 		}
 		pt, err := decrypt(ct, db.key)
@@ -418,7 +431,7 @@ func (db *DB) ListDocuments() ([]Document, error) {
 func (db *DB) GetDocument(id int64) (*Document, error) {
 	d := &Document{}
 	var ct string
-	err := db.conn.QueryRow("SELECT id, title, content, created_at, updated_at FROM documents WHERE id = ?", id).Scan(&d.ID, &d.Title, &ct, &d.CreatedAt, &d.UpdatedAt)
+	err := db.conn.QueryRow("SELECT id, title, content, created_at, updated_at, sort_order FROM documents WHERE id = ?", id).Scan(&d.ID, &d.Title, &ct, &d.CreatedAt, &d.UpdatedAt, &d.SortOrder)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -438,7 +451,7 @@ func (db *DB) CreateDocument(title, content string) error {
 	if err != nil {
 		return err
 	}
-	_, err = db.conn.Exec("INSERT INTO documents (title, content) VALUES (?, ?)", title, ct)
+	_, err = db.conn.Exec("INSERT INTO documents (title, content, sort_order) VALUES (?, ?, COALESCE((SELECT MAX(sort_order)+1 FROM documents), 0))", title, ct)
 	return err
 }
 
@@ -448,6 +461,11 @@ func (db *DB) UpdateDocument(id int64, title, content string) error {
 		return err
 	}
 	_, err = db.conn.Exec("UPDATE documents SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", title, ct, id)
+	return err
+}
+
+func (db *DB) UpdateDocumentSortOrder(id int64, sortOrder int) error {
+	_, err := db.conn.Exec("UPDATE documents SET sort_order = ? WHERE id = ?", sortOrder, id)
 	return err
 }
 

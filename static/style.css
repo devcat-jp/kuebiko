@@ -271,6 +271,31 @@ textarea:focus {
     vertical-align: middle;
 }
 
+.drag-handle-header {
+    width: 40px;
+}
+
+.drag-handle {
+    cursor: grab;
+    color: var(--muted);
+    text-align: center;
+    user-select: none;
+    width: 40px;
+}
+
+tr[draggable="true"]:hover .drag-handle {
+    color: var(--primary);
+}
+
+tr[draggable="true"].dragging {
+    opacity: 0.5;
+    background: #eff6ff;
+}
+
+tr[draggable="true"] td {
+    cursor: default;
+}
+
 .markdown-body {
     background: #fafafa;
     border: 1px solid var(--border);

@@ -4,9 +4,10 @@
 <p>作動時に受信者へ展開する Markdown ドキュメントを管理します。</p>
 <a href="/documents/new" class="btn btn-primary">ドキュメントを追加</a>
 
-<table class="data-table">
+<table class="data-table sortable-table" data-reorder-url="/documents/reorder">
     <thead>
         <tr>
+            <th class="drag-handle-header"></th>
             <th>タイトル</th>
             <th>更新日時</th>
             <th>操作</th>
@@ -14,7 +15,8 @@
     </thead>
     <tbody>
         {{range .Documents}}
-        <tr>
+        <tr draggable="true" data-id="{{.ID}}">
+            <td class="drag-handle">⋮⋮</td>
             <td>{{.Title}}</td>
             <td>{{.UpdatedAt.Format "2006-01-02 15:04"}}</td>
             <td>
@@ -27,7 +29,7 @@
         </tr>
         {{else}}
         <tr>
-            <td colspan="3">ドキュメントが登録されていません。</td>
+            <td colspan="4">ドキュメントが登録されていません。</td>
         </tr>
         {{end}}
     </tbody>
