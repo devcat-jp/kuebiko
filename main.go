@@ -662,7 +662,7 @@ func (app *App) secretNewHandler(w http.ResponseWriter, r *http.Request) {
 		app.render(w, r, "secret_form.html", nil)
 		return
 	}
-	setFlash(w, "ログイン情報を追加しました", "success")
+	setFlash(w, "金融情報を追加しました", "success")
 	http.Redirect(w, r, "/secrets", http.StatusSeeOther)
 }
 
@@ -699,7 +699,7 @@ func (app *App) secretEditHandler(w http.ResponseWriter, r *http.Request) {
 	if err := app.db.UpdateSecret(id, title, string(content)); err != nil {
 		setFlash(w, "更新に失敗しました", "error")
 	} else {
-		setFlash(w, "ログイン情報を更新しました", "success")
+		setFlash(w, "金融情報を更新しました", "success")
 	}
 	http.Redirect(w, r, "/secrets", http.StatusSeeOther)
 }
@@ -724,7 +724,7 @@ func (app *App) secretDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	if err := app.db.DeleteSecret(id); err != nil {
 		setFlash(w, "削除に失敗しました", "error")
 	} else {
-		setFlash(w, "ログイン情報を削除しました", "success")
+		setFlash(w, "金融情報を削除しました", "success")
 	}
 	http.Redirect(w, r, "/secrets", http.StatusSeeOther)
 }
