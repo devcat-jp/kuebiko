@@ -9,7 +9,7 @@
 
 - Windows / macOS / Linux
 - Go 実行環境があればビルド可能（`go build`）
-- 配布バイナリ `kuebiko.exe` があれば Go 不要
+- 配布バイナリ `app.exe` があれば Go 不要
 - ネットワーク接続（メール送信時のみ必要）
 
 ## 3. 起動方法
@@ -18,7 +18,7 @@
 
 ```powershell
 # Windows PowerShell の例
-.\kuebiko.exe
+.\app.exe
 ```
 
 ### 3.2 ソースから実行する場合
@@ -39,28 +39,28 @@ go run .
 `.env` ファイルの例：
 
 ```text
-KUEBIKO_PORT=8443
-KUEBIKO_TLS_AUTO=1
-KUEBIKO_CHECK_INTERVAL=1h
+APP_PORT=8443
+APP_TLS_AUTO=1
+APP_CHECK_INTERVAL=1h
 ```
 
 必要に応じて以下を設定できます。
 
 | 環境変数 | 内容 | 既定値 |
 |----------|------|--------|
-| `KUEBIKO_HOST` | 待ち受け IP アドレス | `127.0.0.1` |
-| `KUEBIKO_PORT` | 待ち受けポート番号 | `8080` |
-| `KUEBIKO_DATA_DIR` | データベース保存先ディレクトリ | `data` |
-| `KUEBIKO_CHECK_INTERVAL` | 生存確認切れの監視間隔 | `1h` |
-| `KUEBIKO_TLS_AUTO` | `1` にすると自己署名証明書を自動生成し HTTPS で起動 | 未設定（HTTP） |
-| `KUEBIKO_TLS_CERT` | サーバー証明書ファイルパス | 未設定 |
-| `KUEBIKO_TLS_KEY` | サーバー秘密鍵ファイルパス | 未設定 |
-| `KUEBIKO_ALLOWED_IPS` | アクセスを許可する IP 範囲（カンマ区切り） | 未設定（すべて許可） |
+| `APP_HOST` | 待ち受け IP アドレス | `127.0.0.1` |
+| `APP_PORT` | 待ち受けポート番号 | `8080` |
+| `APP_DATA_DIR` | データベース保存先ディレクトリ | `data` |
+| `APP_CHECK_INTERVAL` | 生存確認切れの監視間隔 | `1h` |
+| `APP_TLS_AUTO` | `1` にすると自己署名証明書を自動生成し HTTPS で起動 | 未設定（HTTP） |
+| `APP_TLS_CERT` | サーバー証明書ファイルパス | 未設定 |
+| `APP_TLS_KEY` | サーバー秘密鍵ファイルパス | 未設定 |
+| `APP_ALLOWED_IPS` | アクセスを許可する IP 範囲（カンマ区切り） | 未設定（すべて許可） |
 
-`KUEBIKO_ALLOWED_IPS` の例：
+`APP_ALLOWED_IPS` の例：
 
 ```text
-KUEBIKO_ALLOWED_IPS=192.168.11.*,127.0.0.1
+APP_ALLOWED_IPS=192.168.11.*,127.0.0.1
 ```
 
 上記のように設定すると、`192.168.11.xxx` および `127.0.0.1` からのみアクセスできます。空欄の場合はすべての IP を許可します。
@@ -68,23 +68,23 @@ KUEBIKO_ALLOWED_IPS=192.168.11.*,127.0.0.1
 例：
 
 ```powershell
-$env:KUEBIKO_PORT = "3000"
-$env:KUEBIKO_CHECK_INTERVAL = "1m"
-.\kuebiko.exe
+$env:APP_PORT = "3000"
+$env:APP_CHECK_INTERVAL = "1m"
+.\app.exe
 ```
 
 HTTPS で自己署名証明書を自動生成する場合：
 
 ```powershell
-$env:KUEBIKO_TLS_AUTO = "1"
-.\kuebiko.exe
+$env:APP_TLS_AUTO = "1"
+.\app.exe
 ```
 
 LAN 内の他の端末からもアクセスさせたい場合（非推奨）：
 
 ```powershell
-$env:KUEBIKO_HOST = "0.0.0.0"
-.\kuebiko.exe
+$env:APP_HOST = "0.0.0.0"
+.\app.exe
 ```
 
 起動後、ブラウザで以下を開きます。
@@ -95,7 +95,7 @@ http://localhost:8080
 
 HTTPS を使う場合は `https://localhost:8080` となります。自己署名証明書のため、ブラウザでセキュリティ警告が表示されることがあります。
 
-`KUEBIKO_HOST=0.0.0.0` にした場合は、同一 LAN 内の他の端末から `http://<PCのIPアドレス>:8080` でアクセスできます。
+`APP_HOST=0.0.0.0` にした場合は、同一 LAN 内の他の端末から `http://<PCのIPアドレス>:8080` でアクセスできます。
 
 ## 4. 初回セットアップ
 
@@ -213,9 +213,9 @@ HTTPS を使う場合は `https://localhost:8080` となります。自己署名
 ## 12. セキュリティ上の注意
 
 - 本アプリは基本的にローカル専用です。外部ネットワークに公開しないでください。
-- `KUEBIKO_HOST=0.0.0.0` を設定すると同一 LAN 内からアクセス可能になりますが、通信は暗号化されていない場合があります。LAN 公開する場合は `KUEBIKO_TLS_AUTO=1` または正規の証明書で HTTPS を有効にしてください。
-- `data` フォルダ内の `kuebiko.db` には暗号化された情報が入っていますが、暗号化キーも同ファイルに保存されています。`data` フォルダを他人に渡さないでください。
-- HTTPS を使用する場合も、自己署名証明書のためブラウザ警告が出ます。信頼できる証明書を使う場合は `KUEBIKO_TLS_CERT` / `KUEBIKO_TLS_KEY` で指定してください。
+- `APP_HOST=0.0.0.0` を設定すると同一 LAN 内からアクセス可能になりますが、通信は暗号化されていない場合があります。LAN 公開する場合は `APP_TLS_AUTO=1` または正規の証明書で HTTPS を有効にしてください。
+- `data` フォルダ内の `app.db` には暗号化された情報が入っていますが、暗号化キーも同ファイルに保存されています。`data` フォルダを他人に渡さないでください。
+- HTTPS を使用する場合も、自己署名証明書のためブラウザ警告が出ます。信頼できる証明書を使う場合は `APP_TLS_CERT` / `APP_TLS_KEY` で指定してください。
 - 強固な管理者パスワードを設定してください。
 - SMTP パスワードは平文でデータベースに保存されます。信頼できる SMTP サービスのアプリパスワードを使用してください。
 
@@ -223,7 +223,7 @@ HTTPS を使う場合は `https://localhost:8080` となります。自己署名
 
 ### Q. ページが表示されない
 
-- `kuebiko.exe` が起動しているか確認してください
+- `app.exe` が起動しているか確認してください
 - ブラウザで `http://localhost:8080`（または HTTPS の場合は `https://localhost:8080`、設定したポート）を開いているか確認してください
 - ファイアウォールでブロックされていないか確認してください
 

@@ -41,7 +41,7 @@
 └─────────────┬───────────────────────────┘
               │
 ┌─────────────▼───────────────────────────┐
-│  SQLite (kuebiko.db)                    │
+│  SQLite (app.db)                        │
 │  - ユーザー、SMTP、受信者               │
 │  - シークレット、ドキュメント           │
 │  - 暗号化キー（config テーブル）        │
@@ -51,7 +51,7 @@
 ## 4. ディレクトリ構造
 
 ```
-kuebiko/
+app/
 ├── main.go          # エントリポイント、ハンドラ、ルーティング、監視処理
 ├── db.go            # SQLite 接続、スキーマ、CRUD
 ├── auth.go          # パスワードハッシュ化、セッション、認証ミドルウェア
@@ -197,11 +197,15 @@ encrypt(plaintext, keyB64 string) // AES-GCM + base64
 
 ## 11. 環境変数と設定
 
+### 11.1 製品表示名
+
+画面表示と通知メールで使用する製品表示名は、`app_name.go` の `applicationName` 定数で一元管理します。名称変更時はこの定数を変更して再ビルドしてください。実行時の設定変更には対応しません。
+
 実行ディレクトリの `.env` ファイルから環境変数を読み込む機能があります。`.env` に書かれた値は、既存の環境変数がない場合のみ適用されます（環境変数が優先）。
 
-### 11.1 IP アクセス制限
+### 11.2 IP アクセス制限
 
-`KUEBIKO_ALLOWED_IPS` 環境変数、または設定画面で指定した「許可する IP アドレスまたは範囲」により、アクセス元 IP を制限できます。両方が指定されている場合は環境変数が優先されます。空欄の場合はすべての IP を許可します。
+`APP_ALLOWED_IPS` 環境変数、または設定画面で指定した「許可する IP アドレスまたは範囲」により、アクセス元 IP を制限できます。両方が指定されている場合は環境変数が優先されます。空欄の場合はすべての IP を許可します。
 
 指定形式はカンマ区切りで、以下を混在できます。
 
@@ -213,20 +217,20 @@ encrypt(plaintext, keyB64 string) // AES-GCM + base64
 
 | 環境変数 | 型 | デフォルト | 用途 |
 |----------|-----|------------|------|
-| KUEBIKO_HOST | string | 127.0.0.1 | 待ち受け IP アドレス |
-| KUEBIKO_PORT | string | 8080 | HTTP/HTTPS ポート |
-| KUEBIKO_DATA_DIR | string | data | DB 保存ディレクトリ |
-| KUEBIKO_CHECK_INTERVAL | duration | 1h | 久延毘古（くえびこ）監視間隔 |
-| KUEBIKO_TLS_AUTO | string | 未設定 | `1` で自己署名証明書を自動生成 |
-| KUEBIKO_TLS_CERT | string | 未設定 | サーバー証明書ファイルパス |
-| KUEBIKO_TLS_KEY | string | 未設定 | サーバー秘密鍵ファイルパス |
+| APP_HOST | string | 127.0.0.1 | 待ち受け IP アドレス |
+| APP_PORT | string | 8080 | HTTP/HTTPS ポート |
+| APP_DATA_DIR | string | data | DB 保存ディレクトリ |
+| APP_CHECK_INTERVAL | duration | 1h | 久延毘古（くえびこ）監視間隔 |
+| APP_TLS_AUTO | string | 未設定 | `1` で自己署名証明書を自動生成 |
+| APP_TLS_CERT | string | 未設定 | サーバー証明書ファイルパス |
+| APP_TLS_KEY | string | 未設定 | サーバー秘密鍵ファイルパス |
 
 ## 12. HTTPS（TLS）対応
 
 `main.go` 起動時に `ensureTLSCertificate(dataDir)` を呼び出し、以下の優先順位で TLS を設定します。
 
-1. `KUEBIKO_TLS_CERT` と `KUEBIKO_TLS_KEY` が両方指定されていれば、それらのファイルを使用
-2. `KUEBIKO_TLS_AUTO=1` が指定されていれば、`data/server.crt` と `data/server.key` として自己署名証明書を生成・使用
+1. `APP_TLS_CERT` と `APP_TLS_KEY` が両方指定されていれば、それらのファイルを使用
+2. `APP_TLS_AUTO=1` が指定されていれば、`data/server.crt` と `data/server.key` として自己署名証明書を生成・使用
 3. どちらも指定されていなければ HTTP で起動
 
 自己署名証明書の生成は `crypto/x509` を使用した 2048 ビット RSA 鍵です。有効期限は 1 年間。
@@ -238,10 +242,10 @@ encrypt(plaintext, keyB64 string) // AES-GCM + base64
 go mod download
 
 # ビルド
-go build -o kuebiko.exe .
+go build -o app.exe .
 
 # 実行
-.\kuebiko.exe
+.\app.exe
 ```
 
 CGO は不要（modernc.org/sqlite を使用）。
@@ -249,7 +253,7 @@ CGO は不要（modernc.org/sqlite を使用）。
 ## 14. セキュリティ考慮事項
 
 - デフォルトはローカル専用：サーバーは `127.0.0.1` にのみバインド
-- `KUEBIKO_HOST=0.0.0.0` を指定すると LAN 全体に公開されるため、HTTPS 併用を推奨
+- `APP_HOST=0.0.0.0` を指定すると LAN 全体に公開されるため、HTTPS 併用を推奨
 - パスワードは bcrypt でハッシュ化
 - 機密データは AES-GCM で暗号化（ただしキーも同 DB に保存）
 - セッション Cookie は HttpOnly

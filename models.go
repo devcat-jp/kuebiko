@@ -31,7 +31,7 @@ type SMTPSettings struct {
 	UseTLS      bool
 }
 
-// Recipient receives the kuebiko payload.
+// Recipient receives the overdue-action payload.
 type Recipient struct {
 	ID        int64
 	Email     string

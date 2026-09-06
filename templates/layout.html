@@ -4,13 +4,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{.Title}} - 久延毘古（くえびこ）</title>
+    <title>{{.Title}} - {{appName}}</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
     <header>
         <div class="container">
-            <h1><a href="/">久延毘古（くえびこ）</a></h1>
+            <h1><a href="/">{{appName}}</a></h1>
             {{if .User}}
             <nav>
                 <a href="/">ダッシュボード</a>
@@ -30,7 +30,7 @@
         {{.Content}}
     </main>
     <footer class="container">
-        <p>ローカル専用 久延毘古（くえびこ）</p>
+        <p>ローカル専用 {{appName}}</p>
     </footer>
     <script>
         function togglePasswordVisibility(button) {

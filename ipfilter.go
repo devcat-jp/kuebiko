@@ -9,11 +9,11 @@ import (
 )
 
 // ipFilter wraps a handler and rejects requests from IPs not in the allowed list.
-// It reads allowed networks from the KUEBIKO_ALLOWED_IPS environment variable first,
+// It reads allowed networks from the APP_ALLOWED_IPS environment variable first,
 // then falls back to the database config key "allowed_ips". If both are empty,
 // it allows all requests.
 func ipFilter(next http.Handler, db *DB) http.Handler {
-	allowed := os.Getenv("KUEBIKO_ALLOWED_IPS")
+	allowed := os.Getenv("APP_ALLOWED_IPS")
 	if allowed == "" && db != nil {
 		allowed, _ = db.GetConfig("allowed_ips")
 	}

@@ -1,4 +1,4 @@
-module kuebiko
+module local-app
 
 go 1.26.1
 

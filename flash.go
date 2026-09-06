@@ -5,8 +5,8 @@ import (
 	"net/http"
 )
 
-const flashCookieName = "kuebiko_flash"
-const flashTypeCookieName = "kuebiko_flash_type"
+const flashCookieName = "app_flash"
+const flashTypeCookieName = "app_flash_type"
 
 func encodeCookieValue(s string) string {
 	return base64.URLEncoding.EncodeToString([]byte(s))

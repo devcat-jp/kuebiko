@@ -37,7 +37,7 @@ func main() {
 		log.Fatalf("failed to load .env file: %v", err)
 	}
 
-	dataDir := os.Getenv("KUEBIKO_DATA_DIR")
+	dataDir := os.Getenv("APP_DATA_DIR")
 	if dataDir == "" {
 		dataDir = "data"
 	}
@@ -50,7 +50,7 @@ func main() {
 		log.Fatalf("failed to load encryption key: %v", err)
 	}
 
-	dbPath := filepath.Join(dataDir, "kuebiko.db")
+	dbPath := filepath.Join(dataDir, "app.db")
 	db, err := NewDB(dbPath, key)
 	if err != nil {
 		log.Fatalf("failed to open database: %v", err)
@@ -58,7 +58,8 @@ func main() {
 	defer db.Close()
 
 	tmpl, err := template.New("").Funcs(template.FuncMap{
-		"md": renderMarkdown,
+		"md":      renderMarkdown,
+		"appName": func() string { return applicationName },
 	}).ParseFS(templatesFS, "templates/*.html")
 	if err != nil {
 		log.Fatalf("failed to parse templates: %v", err)
@@ -66,12 +67,12 @@ func main() {
 
 	app := &App{db: db, templates: tmpl}
 
-	// Start the kuebiko watcher.
+	// Start the overdue watcher.
 	checkInterval := 1 * time.Hour
-	if d, err := time.ParseDuration(os.Getenv("KUEBIKO_CHECK_INTERVAL")); err == nil && d > 0 {
+	if d, err := time.ParseDuration(os.Getenv("APP_CHECK_INTERVAL")); err == nil && d > 0 {
 		checkInterval = d
 	}
-	go app.watchKuebiko(checkInterval)
+	go app.watchOverdue(checkInterval)
 
 	mux := http.NewServeMux()
 	mux.Handle("/static/", http.FileServerFS(staticFS))
@@ -109,11 +110,11 @@ func main() {
 
 	handler := ipFilter(mux, db)
 
-	host := os.Getenv("KUEBIKO_HOST")
+	host := os.Getenv("APP_HOST")
 	if host == "" {
 		host = "127.0.0.1"
 	}
-	port := os.Getenv("KUEBIKO_PORT")
+	port := os.Getenv("APP_PORT")
 	if port == "" {
 		port = "8080"
 	}
@@ -128,7 +129,7 @@ func main() {
 	if useTLS {
 		scheme = "https"
 	}
-	log.Printf("Kuebiko server starting on %s://%s", scheme, addr)
+	log.Printf("Application server starting on %s://%s", scheme, addr)
 	if useTLS {
 		if err := http.ListenAndServeTLS(addr, certFile, keyFile, handler); err != nil {
 			log.Fatalf("server error: %v", err)
@@ -141,14 +142,14 @@ func main() {
 }
 
 // loadOrGenerateEncryptionKey loads the encryption key from the
-// KUEBIKO_ENCRYPTION_KEY environment variable or the configured key file.
+// APP_ENCRYPTION_KEY environment variable or the configured key file.
 // If neither is available, a new key is generated and written to the file.
 func loadOrGenerateEncryptionKey(dataDir string) (string, error) {
-	if key := os.Getenv("KUEBIKO_ENCRYPTION_KEY"); key != "" {
+	if key := os.Getenv("APP_ENCRYPTION_KEY"); key != "" {
 		return key, nil
 	}
 
-	keyPath := os.Getenv("KUEBIKO_ENCRYPTION_KEY_FILE")
+	keyPath := os.Getenv("APP_ENCRYPTION_KEY_FILE")
 	if keyPath == "" {
 		keyPath = filepath.Join(dataDir, "encryption.key")
 	}
@@ -869,8 +870,8 @@ func (app *App) documentPreviewHandler(w http.ResponseWriter, r *http.Request) {
 	app.render(w, r, "document_preview.html", &AppData{Document: doc})
 }
 
-// Kuebiko watcher.
-func (app *App) watchKuebiko(interval time.Duration) {
+// Overdue watcher.
+func (app *App) watchOverdue(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	// Run immediately on startup too.
@@ -894,7 +895,7 @@ func (app *App) checkTrigger() {
 	}
 	recipients, err := app.db.ListRecipients()
 	if err != nil || len(recipients) == 0 {
-		log.Println("kuebiko overdue but no recipients configured")
+		log.Println("overdue check-in detected but no recipients configured")
 		return
 	}
 	secrets, err := app.db.ListSecrets()
@@ -905,7 +906,7 @@ func (app *App) checkTrigger() {
 	if err != nil {
 		log.Printf("failed to list documents: %v", err)
 	}
-	log.Printf("Kuebiko triggered, sending to %d recipient(s)", len(recipients))
+	log.Printf("Overdue action triggered, sending to %d recipient(s)", len(recipients))
 	if err := app.sendTriggerEmail(recipients, secrets, documents); err != nil {
 		log.Printf("failed to send trigger email: %v", err)
 		return

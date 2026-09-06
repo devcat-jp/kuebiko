@@ -26,10 +26,10 @@ func (app *App) sendTriggerEmail(recipients []Recipient, secrets []Secret, docum
 	for _, r := range recipients {
 		e.To = append(e.To, r.Email)
 	}
-	e.Subject = "【久延毘古（くえびこ）作動】重要な情報のご連絡"
+	e.Subject = fmt.Sprintf("【%s作動】重要な情報のご連絡", applicationName)
 
 	var body bytes.Buffer
-	body.WriteString("このメールは、久延毘古（くえびこ）が作動したため自動送信されています。\n\n")
+	body.WriteString(fmt.Sprintf("このメールは、%sが作動したため自動送信されています。\n\n", applicationName))
 	body.WriteString("送信者が設定した期限までに生存確認が行われなかったため、登録されていた情報をお送りします。\n\n")
 	body.WriteString("==================================================\n")
 	body.WriteString("【金融情報 / シークレット】\n")

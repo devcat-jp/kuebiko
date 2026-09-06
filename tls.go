@@ -14,16 +14,16 @@ import (
 )
 
 // ensureTLSCertificate returns certificate and key file paths.
-// If KUEBIKO_TLS_CERT and KUEBIKO_TLS_KEY are set, those paths are used.
-// If KUEBIKO_TLS_AUTO is set, a self-signed certificate is generated in dataDir.
+// If APP_TLS_CERT and APP_TLS_KEY are set, those paths are used.
+// If APP_TLS_AUTO is set, a self-signed certificate is generated in dataDir.
 func ensureTLSCertificate(dataDir string) (certFile, keyFile string, useTLS bool, err error) {
-	certEnv := os.Getenv("KUEBIKO_TLS_CERT")
-	keyEnv := os.Getenv("KUEBIKO_TLS_KEY")
+	certEnv := os.Getenv("APP_TLS_CERT")
+	keyEnv := os.Getenv("APP_TLS_KEY")
 	if certEnv != "" && keyEnv != "" {
 		return certEnv, keyEnv, true, nil
 	}
 
-	if os.Getenv("KUEBIKO_TLS_AUTO") != "1" {
+	if os.Getenv("APP_TLS_AUTO") != "1" {
 		return "", "", false, nil
 	}
 
@@ -52,7 +52,7 @@ func generateSelfSignedCert(certFile, keyFile string) error {
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(1),
 		Subject: pkix.Name{
-			Organization: []string{"Kuebiko Local"},
+			Organization: []string{"Local Application"},
 		},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().Add(365 * 24 * time.Hour),

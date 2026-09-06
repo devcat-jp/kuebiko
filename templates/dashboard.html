@@ -5,7 +5,7 @@
 <div class="card status-card {{if .IsOverdue}}status-danger{{else}}status-ok{{end}}">
     <h3>ステータス</h3>
     {{if .User.IsTriggered}}
-        <p class="status-text">久延毘古（くえびこ）は作動済みです。次回の生存確認でリセットされます。</p>
+        <p class="status-text">{{appName}}は作動済みです。次回の生存確認でリセットされます。</p>
     {{else if .IsOverdue}}
         <p class="status-text">期限を過ぎています。まもなくメールが送信されます。</p>
     {{else}}
