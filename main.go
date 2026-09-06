@@ -81,7 +81,11 @@ func main() {
 	mux.HandleFunc("/login", app.loginHandler)
 	mux.HandleFunc("/logout", app.logoutHandler)
 	mux.HandleFunc("/checkin", app.authMiddleware(app.checkInHandler))
+	// The tokenized path is intentionally not protected by the login middleware.
+	// Possession of the unguessable URL is the authentication mechanism.
+	mux.HandleFunc("/checkin/", app.secretCheckInHandler)
 	mux.HandleFunc("/settings", app.authMiddleware(app.settingsHandler))
+	mux.HandleFunc("/settings/checkin", app.authMiddleware(app.settingsCheckInHandler))
 
 	mux.HandleFunc("/recipients", app.authMiddleware(app.recipientsHandler))
 	mux.HandleFunc("/recipients/new", app.authMiddleware(app.recipientNewHandler))
@@ -248,6 +252,13 @@ func (app *App) setupHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		// Initialize check-in time to now with default 7-day interval.
 		_ = app.db.UpdateCheckIn(168, time.Now())
+		if token, err := generateCheckInToken(); err == nil {
+			if err := app.db.SetCheckInToken(token); err != nil {
+				log.Printf("failed to create initial check-in URL: %v", err)
+			}
+		} else {
+			log.Printf("failed to generate initial check-in URL: %v", err)
+		}
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
@@ -346,6 +357,87 @@ func (app *App) checkInHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
+// checkInURL builds the private URL from the request's origin. The token is
+// only passed to this function from an authenticated settings request.
+func checkInURL(r *http.Request, token string) string {
+	if token == "" {
+		return ""
+	}
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	return scheme + "://" + r.Host + "/checkin/" + token
+}
+
+// secretCheckInHandler authenticates solely by possession of the unguessable
+// URL and updates the existing interval without exposing application data.
+func (app *App) secretCheckInHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow, noarchive")
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	token := strings.TrimPrefix(r.URL.Path, "/checkin/")
+	if token == "" || strings.Contains(token, "/") {
+		http.NotFound(w, r)
+		return
+	}
+	valid, err := app.db.ValidateCheckInToken(token)
+	if err != nil {
+		log.Printf("failed to validate check-in token: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	if !valid {
+		http.NotFound(w, r)
+		return
+	}
+	user, err := app.db.GetUser()
+	if err != nil || user == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := app.db.UpdateCheckIn(user.CheckInIntervalHours, time.Now()); err != nil {
+		log.Printf("failed to update check-in from private URL: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	app.render(w, r, "checkin.html", nil)
+}
+
+// settingsCheckInHandler manages the private check-in URL. Regenerating the
+// token immediately invalidates the old URL.
+func (app *App) settingsCheckInHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	action := r.FormValue("action")
+	switch action {
+	case "regenerate":
+		token, err := generateCheckInToken()
+		if err != nil {
+			setFlash(w, "秘密ページの生成に失敗しました", "error")
+		} else if err := app.db.SetCheckInToken(token); err != nil {
+			setFlash(w, "秘密ページの保存に失敗しました", "error")
+		} else {
+			setFlash(w, "秘密ページのURLを再生成しました。以前のURLは無効です", "success")
+		}
+	case "disable":
+		if err := app.db.ClearCheckInToken(); err != nil {
+			setFlash(w, "秘密ページの無効化に失敗しました", "error")
+		} else {
+			setFlash(w, "秘密ページを無効化しました", "success")
+		}
+	default:
+		setFlash(w, "不正な操作です", "error")
+	}
+	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+}
+
 // Settings handler (SMTP, email toggle, and IP restrictions).
 func (app *App) settingsHandler(w http.ResponseWriter, r *http.Request) {
 	user, _ := app.db.GetUser()
@@ -354,8 +446,10 @@ func (app *App) settingsHandler(w http.ResponseWriter, r *http.Request) {
 		settings = &SMTPSettings{Host: "smtp.gmail.com", Port: 587, UseTLS: true}
 	}
 	allowedIPs, _ := app.db.GetConfig("allowed_ips")
+	checkInToken, _ := app.db.GetCheckInToken()
+	checkInURLValue := checkInURL(r, checkInToken)
 	if r.Method == http.MethodGet {
-		app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs})
+		app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, CheckInURL: checkInURLValue})
 		return
 	}
 	if r.Method == http.MethodPost {
@@ -369,13 +463,13 @@ func (app *App) settingsHandler(w http.ResponseWriter, r *http.Request) {
 		newAllowedIPs := strings.TrimSpace(r.FormValue("allowed_ips"))
 		if host == "" || port == 0 || username == "" || from == "" {
 			setFlash(w, "SMTP 設定を入力してください", "error")
-			app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: newAllowedIPs})
+			app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: newAllowedIPs, CheckInURL: checkInURLValue})
 			return
 		}
 		if newAllowedIPs != "" {
 			if _, err := parseAllowedNetworks(newAllowedIPs); err != nil {
 				setFlash(w, "許可 IP の形式が正しくありません: "+err.Error(), "error")
-				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: newAllowedIPs})
+				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: newAllowedIPs, CheckInURL: checkInURLValue})
 				return
 			}
 		}
@@ -397,7 +491,7 @@ func (app *App) settingsHandler(w http.ResponseWriter, r *http.Request) {
 				setFlash(w, "設定を保存しました", "success")
 			}
 		}
-		app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: newSettings, AllowedIPs: newAllowedIPs})
+		app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: newSettings, AllowedIPs: newAllowedIPs, CheckInURL: checkInURLValue})
 		return
 	}
 	http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)

@@ -117,6 +117,7 @@ type AppData struct {
 	User          *User
 	Flash         string
 	FlashType     string
+	CheckInURL    string
 	SMTPSettings  *SMTPSettings
 	AllowedIPs    string
 	Recipients    []Recipient

@@ -1,9 +1,13 @@
 package main
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -105,6 +109,72 @@ func (db *DB) GetConfig(key string) (string, error) {
 
 func (db *DB) SetConfig(key, value string) error {
 	_, err := db.conn.Exec("INSERT INTO config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", key, value)
+	return err
+}
+
+const (
+	checkInTokenHashConfig       = "checkin_token_hash"
+	checkInTokenCiphertextConfig = "checkin_token_ciphertext"
+)
+
+func hashCheckInToken(token string) string {
+	hash := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(hash[:])
+}
+
+// SetCheckInToken stores a hash for validation and an encrypted copy for the
+// authenticated settings page, where the private URL can be displayed again.
+func (db *DB) SetCheckInToken(token string) error {
+	if strings.TrimSpace(token) == "" {
+		return fmt.Errorf("check-in token must not be empty")
+	}
+	ciphertext, err := encrypt(token, db.key)
+	if err != nil {
+		return err
+	}
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for key, value := range map[string]string{
+		checkInTokenHashConfig:       hashCheckInToken(token),
+		checkInTokenCiphertextConfig: ciphertext,
+	} {
+		if _, err := tx.Exec("INSERT INTO config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", key, value); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// GetCheckInToken returns the token for authenticated settings pages only.
+func (db *DB) GetCheckInToken() (string, error) {
+	ciphertext, err := db.GetConfig(checkInTokenCiphertextConfig)
+	if err != nil || ciphertext == "" {
+		return "", err
+	}
+	return decrypt(ciphertext, db.key)
+}
+
+func (db *DB) ValidateCheckInToken(token string) (bool, error) {
+	expected, err := db.GetConfig(checkInTokenHashConfig)
+	if err != nil {
+		return false, err
+	}
+	if expected == "" {
+		return false, nil
+	}
+	actual, err := hex.DecodeString(expected)
+	if err != nil {
+		return false, fmt.Errorf("invalid stored check-in token hash: %w", err)
+	}
+	digest := sha256.Sum256([]byte(token))
+	return len(actual) == len(digest) && subtle.ConstantTimeCompare(actual, digest[:]) == 1, nil
+}
+
+func (db *DB) ClearCheckInToken() error {
+	_, err := db.conn.Exec("DELETE FROM config WHERE key IN (?, ?)", checkInTokenHashConfig, checkInTokenCiphertextConfig)
 	return err
 }
 

@@ -52,4 +52,33 @@
         <button type="submit" class="btn btn-primary">保存</button>
     </form>
 </div>
+
+<div class="card">
+    <h3>秘密ページによる生存確認</h3>
+    <p>ログインせずにこのURLへアクセスすると、現在設定されている間隔で生存確認を更新できます。ブックマークなど、他人に見られない方法で保存してください。</p>
+    {{if .CheckInURL}}
+    <div class="form-group">
+        <label for="checkin-url">生存確認URL</label>
+        <input type="url" id="checkin-url" value="{{.CheckInURL}}" readonly onclick="this.select()">
+    </div>
+    <div class="form-actions">
+        <button type="button" class="btn btn-primary" onclick="navigator.clipboard && navigator.clipboard.writeText(document.getElementById('checkin-url').value)">URLをコピー</button>
+        <form method="post" action="/settings/checkin" onsubmit="return confirm('現在のURLを無効にして、新しいURLを発行しますか？')">
+            <input type="hidden" name="action" value="regenerate">
+            <button type="submit" class="btn">URLを再生成</button>
+        </form>
+        <form method="post" action="/settings/checkin" onsubmit="return confirm('秘密ページを無効にしますか？')">
+            <input type="hidden" name="action" value="disable">
+            <button type="submit" class="btn btn-danger">無効化</button>
+        </form>
+    </div>
+    {{else}}
+    <p class="meta">現在、秘密ページは無効です。</p>
+    <form method="post" action="/settings/checkin">
+        <input type="hidden" name="action" value="regenerate">
+        <button type="submit" class="btn btn-primary">秘密ページを発行</button>
+    </form>
+    {{end}}
+    <p class="meta">URLを知っている人はログインなしで生存確認を更新できます。URLが漏れた可能性がある場合は、すぐに再生成または無効化してください。</p>
+</div>
 {{end}}

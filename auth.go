@@ -29,6 +29,11 @@ func generateSessionToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
+// generateCheckInToken creates the bearer token used by the private check-in URL.
+func generateCheckInToken() (string, error) {
+	return generateSessionToken()
+}
+
 // authMiddleware ensures the request has a valid session.
 func (app *App) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
