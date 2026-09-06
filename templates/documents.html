@@ -1,0 +1,35 @@
+{{define "documents_title"}}ドキュメント{{end}}
+{{define "documents_content"}}
+<h2>ドキュメント</h2>
+<p>作動時に受信者へ展開する Markdown ドキュメントを管理します。</p>
+<a href="/documents/new" class="btn btn-primary">ドキュメントを追加</a>
+
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>タイトル</th>
+            <th>更新日時</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .Documents}}
+        <tr>
+            <td>{{.Title}}</td>
+            <td>{{.UpdatedAt.Format "2006-01-02 15:04"}}</td>
+            <td>
+                <a href="/documents/preview?id={{.ID}}" class="btn btn-small">プレビュー</a>
+                <a href="/documents/edit?id={{.ID}}" class="btn btn-small">編集</a>
+                <form method="post" action="/documents/delete?id={{.ID}}" style="display:inline" onsubmit="return confirm('削除しますか？');">
+                    <button type="submit" class="btn btn-danger btn-small">削除</button>
+                </form>
+            </td>
+        </tr>
+        {{else}}
+        <tr>
+            <td colspan="3">ドキュメントが登録されていません。</td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+{{end}}

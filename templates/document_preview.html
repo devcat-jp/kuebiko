@@ -1,0 +1,9 @@
+{{define "document_preview_title"}}{{.Document.Title}}{{end}}
+{{define "document_preview_content"}}
+<h2>{{.Document.Title}}</h2>
+<p class="meta">更新日時: {{.Document.UpdatedAt.Format "2006-01-02 15:04"}}</p>
+<div class="markdown-body">
+    {{.Document.Content | md}}
+</div>
+<a href="/documents" class="btn">一覧へ戻る</a>
+{{end}}

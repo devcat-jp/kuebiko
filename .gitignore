@@ -27,6 +27,15 @@ go.work.sum
 # env file
 .env
 
+# Encryption key
+*.key
+
+# Logs
+*.log
+*.err
+dms.err
+
 # Editor/IDE
 # .idea/
-# .vscode/
+.vscode/
+data/

@@ -1,0 +1,37 @@
+{{define "layout"}}
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - 久延毘古（くえびこ）</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1><a href="/">久延毘古（くえびこ）</a></h1>
+            {{if .User}}
+            <nav>
+                <a href="/">ダッシュボード</a>
+                <a href="/secrets">ログイン情報</a>
+                <a href="/documents">ドキュメント</a>
+                <a href="/recipients">受信者</a>
+                <a href="/settings">設定</a>
+                <a href="/logout">ログアウト</a>
+            </nav>
+            {{end}}
+        </div>
+    </header>
+    <main class="container">
+        {{if .Flash}}
+        <div class="flash flash-{{.FlashType}}">{{.Flash}}</div>
+        {{end}}
+        {{.Content}}
+    </main>
+    <footer class="container">
+        <p>ローカル専用 久延毘古（くえびこ）</p>
+    </footer>
+</body>
+</html>
+{{end}}

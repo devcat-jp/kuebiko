@@ -1,0 +1,55 @@
+{{define "settings_title"}}設定{{end}}
+{{define "settings_content"}}
+<h2>設定</h2>
+
+<div class="card">
+    <h3>メール送信設定</h3>
+    <form method="post" action="/settings">
+        <div class="form-group">
+            <label for="host">SMTP ホスト</label>
+            <input type="text" id="host" name="host" value="{{.SMTPSettings.Host}}" required>
+        </div>
+        <div class="form-group">
+            <label for="port">SMTP ポート</label>
+            <input type="number" id="port" name="port" value="{{.SMTPSettings.Port}}" required>
+        </div>
+        <div class="form-group">
+            <label for="username">SMTP ユーザー名</label>
+            <input type="text" id="username" name="username" value="{{.SMTPSettings.Username}}" required>
+        </div>
+        <div class="form-group">
+            <label for="password">SMTP パスワード</label>
+            <input type="password" id="password" name="password" value="{{.SMTPSettings.Password}}" required>
+        </div>
+        <div class="form-group">
+            <label for="from_address">送信元アドレス</label>
+            <input type="email" id="from_address" name="from_address" value="{{.SMTPSettings.FromAddress}}" required>
+        </div>
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="use_tls" value="1" {{if .SMTPSettings.UseTLS}}checked{{end}}>
+                TLS を使用する（推奨）
+            </label>
+        </div>
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="email_enabled" value="1" {{if .User.EmailEnabled}}checked{{end}}>
+                久延毘古（くえびこ）のメール送信を有効にする
+            </label>
+        </div>
+        <button type="submit" class="btn btn-primary">保存</button>
+    </form>
+</div>
+
+<div class="card">
+    <h3>アクセス制限</h3>
+    <form method="post" action="/settings">
+        <div class="form-group">
+            <label for="allowed_ips">許可する IP アドレスまたは範囲</label>
+            <input type="text" id="allowed_ips" name="allowed_ips" value="{{.AllowedIPs}}" placeholder="例: 192.168.11.*, 127.0.0.1, 10.0.0.0/24">
+            <small>カンマ区切りで指定。空欄の場合はすべて許可します。ワイルドカード表記（例: 192.168.11.*）も使用できます。</small>
+        </div>
+        <button type="submit" class="btn btn-primary">保存</button>
+    </form>
+</div>
+{{end}}
