@@ -226,11 +226,10 @@ func (app *App) setupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodPost {
-		username := strings.TrimSpace(r.FormValue("username"))
 		password := r.FormValue("password")
 		confirm := r.FormValue("confirm")
-		if username == "" || password == "" {
-			setFlash(w, "ユーザー名とパスワードを入力してください", "error")
+		if password == "" {
+			setFlash(w, "パスワードを入力してください", "error")
 			app.render(w, r, "setup.html", nil)
 			return
 		}
@@ -245,7 +244,7 @@ func (app *App) setupHandler(w http.ResponseWriter, r *http.Request) {
 			app.render(w, r, "setup.html", nil)
 			return
 		}
-		if err := app.db.CreateUser(username, hash); err != nil {
+		if err := app.db.CreateUser(hash); err != nil {
 			setFlash(w, "ユーザー作成に失敗しました", "error")
 			app.render(w, r, "setup.html", nil)
 			return
@@ -277,10 +276,9 @@ func (app *App) loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodPost {
-		username := strings.TrimSpace(r.FormValue("username"))
 		password := r.FormValue("password")
-		if username != user.Username || !checkPassword(password, user.PasswordHash) {
-			setFlash(w, "ユーザー名またはパスワードが違います", "error")
+		if !checkPassword(password, user.PasswordHash) {
+			setFlash(w, "パスワードが違います", "error")
 			app.render(w, r, "login.html", nil)
 			return
 		}
@@ -807,7 +805,7 @@ func (app *App) checkTrigger() {
 	if err != nil {
 		log.Printf("failed to list documents: %v", err)
 	}
-	log.Printf("Kuebiko triggered for user %s, sending to %d recipient(s)", user.Username, len(recipients))
+	log.Printf("Kuebiko triggered, sending to %d recipient(s)", len(recipients))
 	if err := app.sendTriggerEmail(recipients, secrets, documents); err != nil {
 		log.Printf("failed to send trigger email: %v", err)
 		return

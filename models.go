@@ -11,7 +11,6 @@ import (
 // User represents the single application user.
 type User struct {
 	ID                   int64
-	Username             string
 	PasswordHash         string
 	SessionToken         *string
 	SessionExpiresAt     *time.Time

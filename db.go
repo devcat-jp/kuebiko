@@ -44,7 +44,6 @@ CREATE TABLE IF NOT EXISTS config (
 
 CREATE TABLE IF NOT EXISTS users (
 	id INTEGER PRIMARY KEY CHECK (id = 1),
-	username TEXT UNIQUE NOT NULL,
 	password_hash TEXT NOT NULL,
 	session_token TEXT,
 	session_expires_at DATETIME,
@@ -179,14 +178,14 @@ func (db *DB) ClearCheckInToken() error {
 }
 
 // User helpers.
-func (db *DB) CreateUser(username, passwordHash string) error {
-	_, err := db.conn.Exec("INSERT INTO users (id, username, password_hash) VALUES (1, ?, ?)", username, passwordHash)
+func (db *DB) CreateUser(passwordHash string) error {
+	_, err := db.conn.Exec("INSERT INTO users (id, password_hash) VALUES (1, ?)", passwordHash)
 	return err
 }
 
 func (db *DB) GetUser() (*User, error) {
 	row := db.conn.QueryRow(`
-		SELECT id, username, password_hash, session_token, session_expires_at,
+		SELECT id, password_hash, session_token, session_expires_at,
 		       check_in_interval_hours, last_check_in_at, is_triggered, email_enabled
 		FROM users WHERE id = 1`)
 	u := &User{}
@@ -194,7 +193,7 @@ func (db *DB) GetUser() (*User, error) {
 	var sessionExpires sql.NullTime
 	var lastCheckIn sql.NullTime
 	var isTriggered, emailEnabled int
-	err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &sessionToken, &sessionExpires,
+	err := row.Scan(&u.ID, &u.PasswordHash, &sessionToken, &sessionExpires,
 		&u.CheckInIntervalHours, &lastCheckIn, &isTriggered, &emailEnabled)
 	if err == sql.ErrNoRows {
 		return nil, nil
