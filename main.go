@@ -451,6 +451,42 @@ func (app *App) settingsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodPost {
+		action := r.FormValue("action")
+		if action == "change_password" {
+			currentPassword := r.FormValue("current_password")
+			newPassword := r.FormValue("new_password")
+			confirmPassword := r.FormValue("confirm_password")
+			if currentPassword == "" || newPassword == "" || confirmPassword == "" {
+				setFlash(w, "パスワード変更には現在のパスワード、新しいパスワード、確認用パスワードをすべて入力してください", "error")
+				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, CheckInURL: checkInURLValue})
+				return
+			}
+			if !checkPassword(currentPassword, user.PasswordHash) {
+				setFlash(w, "現在のパスワードが違います", "error")
+				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, CheckInURL: checkInURLValue})
+				return
+			}
+			if newPassword != confirmPassword {
+				setFlash(w, "新しいパスワードと確認用パスワードが一致しません", "error")
+				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, CheckInURL: checkInURLValue})
+				return
+			}
+			hash, err := hashPassword(newPassword)
+			if err != nil {
+				setFlash(w, "パスワードのハッシュ化に失敗しました", "error")
+				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, CheckInURL: checkInURLValue})
+				return
+			}
+			if err := app.db.UpdateUserPassword(hash); err != nil {
+				setFlash(w, "パスワードの変更に失敗しました", "error")
+				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, CheckInURL: checkInURLValue})
+				return
+			}
+			setFlash(w, "パスワードを変更しました", "success")
+			http.Redirect(w, r, "/settings", http.StatusSeeOther)
+			return
+		}
+
 		host := strings.TrimSpace(r.FormValue("host"))
 		port, _ := strconv.Atoi(r.FormValue("port"))
 		username := strings.TrimSpace(r.FormValue("username"))
@@ -471,6 +507,7 @@ func (app *App) settingsHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+
 		newSettings := &SMTPSettings{
 			Host:        host,
 			Port:        port,

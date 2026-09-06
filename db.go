@@ -225,6 +225,11 @@ func (db *DB) ClearSession() error {
 	return err
 }
 
+func (db *DB) UpdateUserPassword(passwordHash string) error {
+	_, err := db.conn.Exec("UPDATE users SET password_hash = ? WHERE id = 1", passwordHash)
+	return err
+}
+
 func (db *DB) UpdateCheckIn(intervalHours int, t time.Time) error {
 	_, err := db.conn.Exec("UPDATE users SET check_in_interval_hours = ?, last_check_in_at = ?, is_triggered = 0 WHERE id = 1",
 		intervalHours, t)

@@ -361,6 +361,24 @@ textarea:focus {
     gap: 12px;
 }
 
+.password-field {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.password-field input[type="password"],
+.password-field input[type="text"] {
+    flex: 1 1 auto;
+    margin-bottom: 0;
+}
+
+.password-field .btn-toggle {
+    flex: 0 0 auto;
+    padding: 10px 12px;
+    font-size: 0.9rem;
+}
+
 .view-row {
     display: flex;
     align-items: baseline;

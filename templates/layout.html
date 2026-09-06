@@ -32,6 +32,19 @@
     <footer class="container">
         <p>ローカル専用 久延毘古（くえびこ）</p>
     </footer>
+    <script>
+        function togglePasswordVisibility(button) {
+            var targetId = button.getAttribute('data-target');
+            var input = document.getElementById(targetId);
+            if (input.type === 'password') {
+                input.type = 'text';
+                button.textContent = '非表示';
+            } else {
+                input.type = 'password';
+                button.textContent = '表示';
+            }
+        }
+    </script>
 </body>
 </html>
 {{end}}

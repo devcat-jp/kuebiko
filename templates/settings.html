@@ -42,6 +42,35 @@
 </div>
 
 <div class="card">
+    <h3>パスワード変更</h3>
+    <form method="post" action="/settings">
+        <input type="hidden" name="action" value="change_password">
+        <div class="form-group">
+            <label for="current_password">現在のパスワード</label>
+            <div class="password-field">
+                <input type="password" id="current_password" name="current_password" required>
+                <button type="button" class="btn btn-toggle" data-target="current_password" onclick="togglePasswordVisibility(this)">表示</button>
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="new_password">新しいパスワード</label>
+            <div class="password-field">
+                <input type="password" id="new_password" name="new_password" required>
+                <button type="button" class="btn btn-toggle" data-target="new_password" onclick="togglePasswordVisibility(this)">表示</button>
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="confirm_password">新しいパスワード（確認）</label>
+            <div class="password-field">
+                <input type="password" id="confirm_password" name="confirm_password" required>
+                <button type="button" class="btn btn-toggle" data-target="confirm_password" onclick="togglePasswordVisibility(this)">表示</button>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">パスワードを変更</button>
+    </form>
+</div>
+
+<div class="card">
     <h3>アクセス制限</h3>
     <form method="post" action="/settings">
         <div class="form-group">
