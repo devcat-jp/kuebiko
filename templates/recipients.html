@@ -1,16 +1,13 @@
-{{define "recipients_title"}}受信者一覧{{end}}
+{{define "recipients_title"}}{{t .Lang "recipients"}}{{end}}
 {{define "recipients_content"}}
-<h2>受信者一覧</h2>
-<p>{{appName}}作動時に情報を送信するメールアドレスを管理します。</p>
-<a href="/recipients/new" class="btn btn-primary">受信者を追加</a>
+<h2>{{t .Lang "recipients"}}</h2><p>{{t .Lang "manage_recipients"}}</p>
+<a href="/recipients/new" class="btn btn-primary">{{t .Lang "add_recipient"}}</a>
 
 <table class="data-table sortable-table" data-reorder-url="/recipients/reorder">
     <thead>
         <tr>
             <th class="drag-handle-header"></th>
-            <th>名前</th>
-            <th>メールアドレス</th>
-            <th>操作</th>
+            <th>{{t .Lang "name"}}</th><th>{{t .Lang "email_address"}}</th><th>{{t .Lang "edit"}}</th>
         </tr>
     </thead>
     <tbody>
@@ -20,15 +17,15 @@
             <td>{{.Name}}</td>
             <td>{{.Email}}</td>
             <td>
-                <a href="/recipients/edit?id={{.ID}}" class="btn btn-small">編集</a>
-                <form method="post" action="/recipients/delete?id={{.ID}}" style="display:inline" onsubmit="return confirm('削除しますか？');">
-                    <button type="submit" class="btn btn-danger btn-small">削除</button>
+                <a href="/recipients/edit?id={{.ID}}" class="btn btn-small">{{t $.Lang "edit"}}</a>
+                <form method="post" action="/recipients/delete?id={{.ID}}" style="display:inline" onsubmit="return confirm('{{t $.Lang "delete_confirm"}}');">
+                    <button type="submit" class="btn btn-danger btn-small">{{t $.Lang "delete"}}</button>
                 </form>
             </td>
         </tr>
         {{else}}
         <tr>
-            <td colspan="4">受信者が登録されていません。</td>
+            <td colspan="4">{{t $.Lang "no_recipients"}}</td>
         </tr>
         {{end}}
     </tbody>

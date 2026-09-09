@@ -1,16 +1,14 @@
-{{define "documents_title"}}ドキュメント{{end}}
+{{define "documents_title"}}{{t .Lang "documents"}}{{end}}
 {{define "documents_content"}}
-<h2>ドキュメント</h2>
-<p>作動時に受信者へ展開する Markdown ドキュメントを管理します。</p>
-<a href="/documents/new" class="btn btn-primary">ドキュメントを追加</a>
+<h2>{{t .Lang "documents"}}</h2>
+<p>{{t .Lang "manage_documents"}}</p>
+<a href="/documents/new" class="btn btn-primary">{{t .Lang "add_document"}}</a>
 
 <table class="data-table sortable-table" data-reorder-url="/documents/reorder">
     <thead>
         <tr>
             <th class="drag-handle-header"></th>
-            <th>タイトル</th>
-            <th>更新日時</th>
-            <th>操作</th>
+            <th>{{t .Lang "title"}}</th><th>{{t .Lang "updated_at"}}</th><th>{{t .Lang "edit"}}</th>
         </tr>
     </thead>
     <tbody>
@@ -20,16 +18,16 @@
             <td>{{.Title}}</td>
             <td>{{.UpdatedAt.Format "2006-01-02 15:04"}}</td>
             <td>
-                <a href="/documents/preview?id={{.ID}}" class="btn btn-small">プレビュー</a>
-                <a href="/documents/edit?id={{.ID}}" class="btn btn-small">編集</a>
-                <form method="post" action="/documents/delete?id={{.ID}}" style="display:inline" onsubmit="return confirm('削除しますか？');">
-                    <button type="submit" class="btn btn-danger btn-small">削除</button>
+                <a href="/documents/preview?id={{.ID}}" class="btn btn-small">{{t $.Lang "preview"}}</a>
+                <a href="/documents/edit?id={{.ID}}" class="btn btn-small">{{t $.Lang "edit"}}</a>
+                <form method="post" action="/documents/delete?id={{.ID}}" style="display:inline" onsubmit="return confirm('{{t $.Lang "delete_confirm"}}');">
+                    <button type="submit" class="btn btn-danger btn-small">{{t $.Lang "delete"}}</button>
                 </form>
             </td>
         </tr>
         {{else}}
         <tr>
-            <td colspan="4">ドキュメントが登録されていません。</td>
+            <td colspan="4">{{t $.Lang "no_documents"}}</td>
         </tr>
         {{end}}
     </tbody>

@@ -32,6 +32,9 @@ type App struct {
 }
 
 func main() {
+	if err := initTranslations(); err != nil {
+		log.Fatalf("failed to load translations: %v", err)
+	}
 	// Load optional .env file before reading environment variables.
 	if err := loadEnvFile(".env"); err != nil {
 		log.Fatalf("failed to load .env file: %v", err)
@@ -58,8 +61,10 @@ func main() {
 	defer db.Close()
 
 	tmpl, err := template.New("").Funcs(template.FuncMap{
-		"md":      renderMarkdown,
-		"appName": func() string { return applicationName },
+		"md":          renderMarkdown,
+		"appName":     func() string { return applicationName },
+		"languageURL": languageURL,
+		"t":           translate,
 	}).ParseFS(templatesFS, "templates/*.html")
 	if err != nil {
 		log.Fatalf("failed to parse templates: %v", err)
@@ -76,6 +81,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("/static/", http.FileServerFS(staticFS))
+	mux.HandleFunc("/language", app.languageHandler)
 
 	mux.HandleFunc("/", app.authMiddleware(app.dashboardHandler))
 	mux.HandleFunc("/setup", app.setupHandler)
@@ -108,7 +114,7 @@ func main() {
 	mux.HandleFunc("/documents/preview", app.authMiddleware(app.documentPreviewHandler))
 	mux.HandleFunc("/documents/reorder", app.authMiddleware(app.documentsReorderHandler))
 
-	handler := ipFilter(mux, db)
+	handler := languageMiddleware(ipFilter(mux, db))
 
 	host := os.Getenv("APP_HOST")
 	if host == "" {
@@ -185,8 +191,15 @@ func (app *App) render(w http.ResponseWriter, r *http.Request, name string, data
 	}
 	user, _ := app.currentUser(r)
 	data.User = user
+	data.Lang = languageFromRequest(r)
+	data.RequestPath = r.URL.RequestURI()
+	data.AppName = applicationName
 	flash, flashType := getFlash(w, r)
-	data.Flash = flash
+	if parts := strings.SplitN(flash, "|", 2); len(parts) == 2 {
+		data.Flash = translate(data.Lang, parts[0]) + parts[1]
+	} else {
+		data.Flash = translate(data.Lang, flash)
+	}
 	data.FlashType = flashType
 
 	base := strings.TrimSuffix(name, ".html")
@@ -233,23 +246,23 @@ func (app *App) setupHandler(w http.ResponseWriter, r *http.Request) {
 		password := r.FormValue("password")
 		confirm := r.FormValue("confirm")
 		if password == "" {
-			setFlash(w, "パスワードを入力してください", "error")
+			setFlash(w, "password_required", "error")
 			app.render(w, r, "setup.html", nil)
 			return
 		}
 		if password != confirm {
-			setFlash(w, "パスワードが一致しません", "error")
+			setFlash(w, "password_mismatch", "error")
 			app.render(w, r, "setup.html", nil)
 			return
 		}
 		hash, err := hashPassword(password)
 		if err != nil {
-			setFlash(w, "エラーが発生しました", "error")
+			setFlash(w, "generic_error", "error")
 			app.render(w, r, "setup.html", nil)
 			return
 		}
 		if err := app.db.CreateUser(hash); err != nil {
-			setFlash(w, "ユーザー作成に失敗しました", "error")
+			setFlash(w, "user_create_failed", "error")
 			app.render(w, r, "setup.html", nil)
 			return
 		}
@@ -282,19 +295,19 @@ func (app *App) loginHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		password := r.FormValue("password")
 		if !checkPassword(password, user.PasswordHash) {
-			setFlash(w, "パスワードが違います", "error")
+			setFlash(w, "incorrect_password", "error")
 			app.render(w, r, "login.html", nil)
 			return
 		}
 		token, err := generateSessionToken()
 		if err != nil {
-			setFlash(w, "エラーが発生しました", "error")
+			setFlash(w, "generic_error", "error")
 			app.render(w, r, "login.html", nil)
 			return
 		}
 		expires := time.Now().Add(24 * time.Hour)
 		if err := app.db.UpdateUserSession(token, expires); err != nil {
-			setFlash(w, "エラーが発生しました", "error")
+			setFlash(w, "generic_error", "error")
 			app.render(w, r, "login.html", nil)
 			return
 		}
@@ -352,9 +365,9 @@ func (app *App) checkInHandler(w http.ResponseWriter, r *http.Request) {
 		interval = iv
 	}
 	if err := app.db.UpdateCheckIn(interval, time.Now()); err != nil {
-		setFlash(w, "生存確認の更新に失敗しました", "error")
+		setFlash(w, "checkin_update_failed", "error")
 	} else {
-		setFlash(w, "生存確認を更新しました", "success")
+		setFlash(w, "checkin_updated", "success")
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
@@ -422,20 +435,20 @@ func (app *App) settingsCheckInHandler(w http.ResponseWriter, r *http.Request) {
 	case "regenerate":
 		token, err := generateCheckInToken()
 		if err != nil {
-			setFlash(w, "秘密ページの生成に失敗しました", "error")
+			setFlash(w, "private_page_generate_failed", "error")
 		} else if err := app.db.SetCheckInToken(token); err != nil {
-			setFlash(w, "秘密ページの保存に失敗しました", "error")
+			setFlash(w, "private_page_save_failed", "error")
 		} else {
-			setFlash(w, "秘密ページのURLを再生成しました。以前のURLは無効です", "success")
+			setFlash(w, "private_page_regenerated", "success")
 		}
 	case "disable":
 		if err := app.db.ClearCheckInToken(); err != nil {
-			setFlash(w, "秘密ページの無効化に失敗しました", "error")
+			setFlash(w, "private_page_disable_failed", "error")
 		} else {
-			setFlash(w, "秘密ページを無効化しました", "success")
+			setFlash(w, "private_page_disabled", "success")
 		}
 	default:
-		setFlash(w, "不正な操作です", "error")
+		setFlash(w, "invalid_operation", "error")
 	}
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
 }
@@ -461,32 +474,32 @@ func (app *App) settingsHandler(w http.ResponseWriter, r *http.Request) {
 			newPassword := r.FormValue("new_password")
 			confirmPassword := r.FormValue("confirm_password")
 			if currentPassword == "" || newPassword == "" || confirmPassword == "" {
-				setFlash(w, "パスワード変更には現在のパスワード、新しいパスワード、確認用パスワードをすべて入力してください", "error")
+				setFlash(w, "password_fields_required", "error")
 				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, CheckInURL: checkInURLValue})
 				return
 			}
 			if !checkPassword(currentPassword, user.PasswordHash) {
-				setFlash(w, "現在のパスワードが違います", "error")
+				setFlash(w, "current_password_incorrect", "error")
 				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, CheckInURL: checkInURLValue})
 				return
 			}
 			if newPassword != confirmPassword {
-				setFlash(w, "新しいパスワードと確認用パスワードが一致しません", "error")
+				setFlash(w, "new_password_mismatch", "error")
 				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, CheckInURL: checkInURLValue})
 				return
 			}
 			hash, err := hashPassword(newPassword)
 			if err != nil {
-				setFlash(w, "パスワードのハッシュ化に失敗しました", "error")
+				setFlash(w, "password_hash_failed", "error")
 				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, CheckInURL: checkInURLValue})
 				return
 			}
 			if err := app.db.UpdateUserPassword(hash); err != nil {
-				setFlash(w, "パスワードの変更に失敗しました", "error")
+				setFlash(w, "password_change_failed", "error")
 				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, CheckInURL: checkInURLValue})
 				return
 			}
-			setFlash(w, "パスワードを変更しました", "success")
+			setFlash(w, "password_changed", "success")
 			http.Redirect(w, r, "/settings", http.StatusSeeOther)
 			return
 		}
@@ -500,13 +513,13 @@ func (app *App) settingsHandler(w http.ResponseWriter, r *http.Request) {
 		enabled := r.FormValue("email_enabled") == "1"
 		newAllowedIPs := strings.TrimSpace(r.FormValue("allowed_ips"))
 		if host == "" || port == 0 || username == "" || from == "" {
-			setFlash(w, "SMTP 設定を入力してください", "error")
+			setFlash(w, "smtp_required", "error")
 			app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: newAllowedIPs, CheckInURL: checkInURLValue})
 			return
 		}
 		if newAllowedIPs != "" {
 			if _, err := parseAllowedNetworks(newAllowedIPs); err != nil {
-				setFlash(w, "許可 IP の形式が正しくありません: "+err.Error(), "error")
+				setFlash(w, "allowed_ip_invalid|"+err.Error(), "error")
 				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: newAllowedIPs, CheckInURL: checkInURLValue})
 				return
 			}
@@ -521,13 +534,13 @@ func (app *App) settingsHandler(w http.ResponseWriter, r *http.Request) {
 			UseTLS:      useTLS,
 		}
 		if err := app.db.SaveSMTPSettings(newSettings); err != nil {
-			setFlash(w, "設定の保存に失敗しました", "error")
+			setFlash(w, "settings_save_failed", "error")
 		} else {
 			_ = app.db.SetEmailEnabled(enabled)
 			if err := app.db.SetConfig("allowed_ips", newAllowedIPs); err != nil {
-				setFlash(w, "許可 IP の保存に失敗しました", "error")
+				setFlash(w, "allowed_ips_save_failed", "error")
 			} else {
-				setFlash(w, "設定を保存しました", "success")
+				setFlash(w, "settings_saved", "success")
 			}
 		}
 		app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: newSettings, AllowedIPs: newAllowedIPs, CheckInURL: checkInURLValue})
@@ -550,16 +563,16 @@ func (app *App) recipientNewHandler(w http.ResponseWriter, r *http.Request) {
 	email := strings.TrimSpace(r.FormValue("email"))
 	name := strings.TrimSpace(r.FormValue("name"))
 	if email == "" {
-		setFlash(w, "メールアドレスを入力してください", "error")
+		setFlash(w, "email_required", "error")
 		app.render(w, r, "recipient_form.html", nil)
 		return
 	}
 	if err := app.db.CreateRecipient(email, name); err != nil {
-		setFlash(w, "追加に失敗しました", "error")
+		setFlash(w, "add_failed", "error")
 		app.render(w, r, "recipient_form.html", nil)
 		return
 	}
-	setFlash(w, "受信者を追加しました", "success")
+	setFlash(w, "recipient_added", "success")
 	http.Redirect(w, r, "/recipients", http.StatusSeeOther)
 }
 
@@ -577,14 +590,14 @@ func (app *App) recipientEditHandler(w http.ResponseWriter, r *http.Request) {
 	email := strings.TrimSpace(r.FormValue("email"))
 	name := strings.TrimSpace(r.FormValue("name"))
 	if email == "" {
-		setFlash(w, "メールアドレスを入力してください", "error")
+		setFlash(w, "email_required", "error")
 		app.render(w, r, "recipient_form.html", &AppData{Recipient: recipient})
 		return
 	}
 	if err := app.db.UpdateRecipient(id, email, name); err != nil {
-		setFlash(w, "更新に失敗しました", "error")
+		setFlash(w, "update_failed", "error")
 	} else {
-		setFlash(w, "受信者を更新しました", "success")
+		setFlash(w, "recipient_updated", "success")
 	}
 	http.Redirect(w, r, "/recipients", http.StatusSeeOther)
 }
@@ -596,9 +609,9 @@ func (app *App) recipientDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	id, _ := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
 	if err := app.db.DeleteRecipient(id); err != nil {
-		setFlash(w, "削除に失敗しました", "error")
+		setFlash(w, "delete_failed", "error")
 	} else {
-		setFlash(w, "受信者を削除しました", "success")
+		setFlash(w, "recipient_deleted", "success")
 	}
 	http.Redirect(w, r, "/recipients", http.StatusSeeOther)
 }
@@ -665,28 +678,28 @@ func (app *App) secretNewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	title := strings.TrimSpace(r.FormValue("title"))
 	if title == "" {
-		setFlash(w, "タイトルを入力してください", "error")
+		setFlash(w, "title_required", "error")
 		app.render(w, r, "secret_form.html", nil)
 		return
 	}
 	payload, err := parseSecretForm(r)
 	if err != nil {
-		setFlash(w, "入力内容を確認してください", "error")
+		setFlash(w, "input_invalid", "error")
 		app.render(w, r, "secret_form.html", nil)
 		return
 	}
 	content, err := json.Marshal(payload)
 	if err != nil {
-		setFlash(w, "追加に失敗しました", "error")
+		setFlash(w, "add_failed", "error")
 		app.render(w, r, "secret_form.html", nil)
 		return
 	}
 	if err := app.db.CreateSecret(title, string(content)); err != nil {
-		setFlash(w, "追加に失敗しました", "error")
+		setFlash(w, "add_failed", "error")
 		app.render(w, r, "secret_form.html", nil)
 		return
 	}
-	setFlash(w, "金融情報を追加しました", "success")
+	setFlash(w, "secret_added", "success")
 	http.Redirect(w, r, "/secrets", http.StatusSeeOther)
 }
 
@@ -704,26 +717,26 @@ func (app *App) secretEditHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	title := strings.TrimSpace(r.FormValue("title"))
 	if title == "" {
-		setFlash(w, "タイトルを入力してください", "error")
+		setFlash(w, "title_required", "error")
 		app.render(w, r, "secret_form.html", &AppData{Secret: secret})
 		return
 	}
 	payload, err := parseSecretForm(r)
 	if err != nil {
-		setFlash(w, "入力内容を確認してください", "error")
+		setFlash(w, "input_invalid", "error")
 		app.render(w, r, "secret_form.html", &AppData{Secret: secret})
 		return
 	}
 	content, err := json.Marshal(payload)
 	if err != nil {
-		setFlash(w, "更新に失敗しました", "error")
+		setFlash(w, "update_failed", "error")
 		app.render(w, r, "secret_form.html", &AppData{Secret: secret})
 		return
 	}
 	if err := app.db.UpdateSecret(id, title, string(content)); err != nil {
-		setFlash(w, "更新に失敗しました", "error")
+		setFlash(w, "update_failed", "error")
 	} else {
-		setFlash(w, "金融情報を更新しました", "success")
+		setFlash(w, "secret_updated", "success")
 	}
 	http.Redirect(w, r, "/secrets", http.StatusSeeOther)
 }
@@ -746,9 +759,9 @@ func (app *App) secretDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	id, _ := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
 	if err := app.db.DeleteSecret(id); err != nil {
-		setFlash(w, "削除に失敗しました", "error")
+		setFlash(w, "delete_failed", "error")
 	} else {
-		setFlash(w, "金融情報を削除しました", "success")
+		setFlash(w, "secret_deleted", "success")
 	}
 	http.Redirect(w, r, "/secrets", http.StatusSeeOther)
 }
@@ -787,16 +800,16 @@ func (app *App) documentNewHandler(w http.ResponseWriter, r *http.Request) {
 	title := strings.TrimSpace(r.FormValue("title"))
 	content := r.FormValue("content")
 	if title == "" {
-		setFlash(w, "タイトルを入力してください", "error")
+		setFlash(w, "title_required", "error")
 		app.render(w, r, "document_form.html", nil)
 		return
 	}
 	if err := app.db.CreateDocument(title, content); err != nil {
-		setFlash(w, "追加に失敗しました", "error")
+		setFlash(w, "add_failed", "error")
 		app.render(w, r, "document_form.html", nil)
 		return
 	}
-	setFlash(w, "ドキュメントを追加しました", "success")
+	setFlash(w, "document_added", "success")
 	http.Redirect(w, r, "/documents", http.StatusSeeOther)
 }
 
@@ -814,14 +827,14 @@ func (app *App) documentEditHandler(w http.ResponseWriter, r *http.Request) {
 	title := strings.TrimSpace(r.FormValue("title"))
 	content := r.FormValue("content")
 	if title == "" {
-		setFlash(w, "タイトルを入力してください", "error")
+		setFlash(w, "title_required", "error")
 		app.render(w, r, "document_form.html", &AppData{Document: doc})
 		return
 	}
 	if err := app.db.UpdateDocument(id, title, content); err != nil {
-		setFlash(w, "更新に失敗しました", "error")
+		setFlash(w, "update_failed", "error")
 	} else {
-		setFlash(w, "ドキュメントを更新しました", "success")
+		setFlash(w, "document_updated", "success")
 	}
 	http.Redirect(w, r, "/documents", http.StatusSeeOther)
 }
@@ -833,9 +846,9 @@ func (app *App) documentDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	id, _ := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
 	if err := app.db.DeleteDocument(id); err != nil {
-		setFlash(w, "削除に失敗しました", "error")
+		setFlash(w, "delete_failed", "error")
 	} else {
-		setFlash(w, "ドキュメントを削除しました", "success")
+		setFlash(w, "document_deleted", "success")
 	}
 	http.Redirect(w, r, "/documents", http.StatusSeeOther)
 }

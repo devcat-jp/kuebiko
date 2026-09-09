@@ -1,113 +1,113 @@
-{{define "settings_title"}}設定{{end}}
+{{define "settings_title"}}{{t .Lang "settings"}}{{end}}
 {{define "settings_content"}}
-<h2>設定</h2>
+<h2>{{t .Lang "settings"}}</h2>
 
 <div class="card">
-    <h3>メール送信設定</h3>
+    <h3>{{t .Lang "email_settings"}}</h3>
     <form method="post" action="/settings">
         <div class="form-group">
-            <label for="host">SMTP ホスト</label>
+            <label for="host">{{t .Lang "smtp_host"}}</label>
             <input type="text" id="host" name="host" value="{{.SMTPSettings.Host}}" required>
         </div>
         <div class="form-group">
-            <label for="port">SMTP ポート</label>
+            <label for="port">{{t .Lang "smtp_port"}}</label>
             <input type="number" id="port" name="port" value="{{.SMTPSettings.Port}}" required>
         </div>
         <div class="form-group">
-            <label for="username">SMTP ユーザー名</label>
+            <label for="username">{{t .Lang "smtp_username"}}</label>
             <input type="text" id="username" name="username" value="{{.SMTPSettings.Username}}" required>
         </div>
         <div class="form-group">
-            <label for="password">SMTP パスワード</label>
+            <label for="password">{{t .Lang "smtp_password"}}</label>
             <input type="password" id="password" name="password" value="{{.SMTPSettings.Password}}" required>
         </div>
         <div class="form-group">
-            <label for="from_address">送信元アドレス</label>
+            <label for="from_address">{{t .Lang "from_address"}}</label>
             <input type="email" id="from_address" name="from_address" value="{{.SMTPSettings.FromAddress}}" required>
         </div>
         <div class="form-group">
             <label>
                 <input type="checkbox" name="use_tls" value="1" {{if .SMTPSettings.UseTLS}}checked{{end}}>
-                TLS を使用する（推奨）
+                {{t .Lang "use_tls"}}
             </label>
         </div>
         <div class="form-group">
             <label>
                 <input type="checkbox" name="email_enabled" value="1" {{if .User.EmailEnabled}}checked{{end}}>
-                {{appName}}のメール送信を有効にする
+                {{.AppName}} {{t .Lang "enable_email"}}
             </label>
         </div>
-        <button type="submit" class="btn btn-primary">保存</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "save"}}</button>
     </form>
 </div>
 
 <div class="card">
-    <h3>パスワード変更</h3>
+    <h3>{{t .Lang "change_password"}}</h3>
     <form method="post" action="/settings">
         <input type="hidden" name="action" value="change_password">
         <div class="form-group">
-            <label for="current_password">現在のパスワード</label>
+            <label for="current_password">{{t .Lang "current_password"}}</label>
             <div class="password-field">
                 <input type="password" id="current_password" name="current_password" required>
-                <button type="button" class="btn btn-toggle" data-target="current_password" onclick="togglePasswordVisibility(this)">表示</button>
+                <button type="button" class="btn btn-toggle" data-target="current_password" onclick="togglePasswordVisibility(this)">{{t .Lang "show"}}</button>
             </div>
         </div>
         <div class="form-group">
-            <label for="new_password">新しいパスワード</label>
+            <label for="new_password">{{t .Lang "new_password"}}</label>
             <div class="password-field">
                 <input type="password" id="new_password" name="new_password" required>
-                <button type="button" class="btn btn-toggle" data-target="new_password" onclick="togglePasswordVisibility(this)">表示</button>
+                <button type="button" class="btn btn-toggle" data-target="new_password" onclick="togglePasswordVisibility(this)">{{t .Lang "show"}}</button>
             </div>
         </div>
         <div class="form-group">
-            <label for="confirm_password">新しいパスワード（確認）</label>
+            <label for="confirm_password">{{t .Lang "confirm_password"}}</label>
             <div class="password-field">
                 <input type="password" id="confirm_password" name="confirm_password" required>
-                <button type="button" class="btn btn-toggle" data-target="confirm_password" onclick="togglePasswordVisibility(this)">表示</button>
+                <button type="button" class="btn btn-toggle" data-target="confirm_password" onclick="togglePasswordVisibility(this)">{{t .Lang "show"}}</button>
             </div>
         </div>
-        <button type="submit" class="btn btn-primary">パスワードを変更</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "change_password_action"}}</button>
     </form>
 </div>
 
 <div class="card">
-    <h3>アクセス制限</h3>
+    <h3>{{t .Lang "access_restriction"}}</h3>
     <form method="post" action="/settings">
         <div class="form-group">
-            <label for="allowed_ips">許可する IP アドレスまたは範囲</label>
-            <input type="text" id="allowed_ips" name="allowed_ips" value="{{.AllowedIPs}}" placeholder="例: 192.168.11.*, 127.0.0.1, 10.0.0.0/24">
-            <small>カンマ区切りで指定。空欄の場合はすべて許可します。ワイルドカード表記（例: 192.168.11.*）も使用できます。</small>
+            <label for="allowed_ips">{{t .Lang "allowed_ips"}}</label>
+            <input type="text" id="allowed_ips" name="allowed_ips" value="{{.AllowedIPs}}" placeholder="{{t .Lang "ip_example"}}">
+            <small>{{t .Lang "ip_help"}}</small>
         </div>
-        <button type="submit" class="btn btn-primary">保存</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "save"}}</button>
     </form>
 </div>
 
 <div class="card">
-    <h3>秘密ページによる生存確認</h3>
-    <p>ログインせずにこのURLへアクセスすると、現在設定されている間隔で生存確認を更新できます。ブックマークなど、他人に見られない方法で保存してください。</p>
+    <h3>{{t .Lang "private_checkin"}}</h3>
+    <p>{{t .Lang "private_page_description"}}</p>
     {{if .CheckInURL}}
     <div class="form-group">
-        <label for="checkin-url">生存確認URL</label>
+        <label for="checkin-url">{{t .Lang "checkin_url"}}</label>
         <input type="url" id="checkin-url" value="{{.CheckInURL}}" readonly onclick="this.select()">
     </div>
     <div class="form-actions">
-        <button type="button" class="btn btn-primary" onclick="navigator.clipboard && navigator.clipboard.writeText(document.getElementById('checkin-url').value)">URLをコピー</button>
-        <form method="post" action="/settings/checkin" onsubmit="return confirm('現在のURLを無効にして、新しいURLを発行しますか？')">
+        <button type="button" class="btn btn-primary" onclick="navigator.clipboard && navigator.clipboard.writeText(document.getElementById('checkin-url').value)">{{t .Lang "copy_url"}}</button>
+        <form method="post" action="/settings/checkin" onsubmit="return confirm('{{t .Lang "regenerate_confirm"}}')">
             <input type="hidden" name="action" value="regenerate">
-            <button type="submit" class="btn">URLを再生成</button>
+            <button type="submit" class="btn">{{t .Lang "regenerate_url"}}</button>
         </form>
-        <form method="post" action="/settings/checkin" onsubmit="return confirm('秘密ページを無効にしますか？')">
+        <form method="post" action="/settings/checkin" onsubmit="return confirm('{{t .Lang "disable_confirm"}}')">
             <input type="hidden" name="action" value="disable">
-            <button type="submit" class="btn btn-danger">無効化</button>
+            <button type="submit" class="btn btn-danger">{{t .Lang "disable"}}</button>
         </form>
     </div>
     {{else}}
-    <p class="meta">現在、秘密ページは無効です。</p>
+    <p class="meta">{{t .Lang "private_page_disabled_status"}}</p>
     <form method="post" action="/settings/checkin">
         <input type="hidden" name="action" value="regenerate">
-        <button type="submit" class="btn btn-primary">秘密ページを発行</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "issue_private_page"}}</button>
     </form>
     {{end}}
-    <p class="meta">URLを知っている人はログインなしで生存確認を更新できます。URLが漏れた可能性がある場合は、すぐに再生成または無効化してください。</p>
+    <p class="meta">{{t .Lang "private_page_warning"}}</p>
 </div>
 {{end}}

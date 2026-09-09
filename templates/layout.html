@@ -1,24 +1,49 @@
 {{define "layout"}}
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="{{.Lang}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{.Title}} - {{appName}}</title>
+    <title>{{.Title}} - {{.AppName}}</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
     <header>
         <div class="container">
-            <h1><a href="/">{{appName}}</a></h1>
+            <h1><a href="/">{{.AppName}}</a></h1>
             {{if .User}}
             <nav>
-                <a href="/">ダッシュボード</a>
-                <a href="/secrets">金融情報</a>
-                <a href="/documents">ドキュメント</a>
-                <a href="/recipients">受信者</a>
-                <a href="/settings">設定</a>
-                <a href="/logout">ログアウト</a>
+                <a href="/">{{t .Lang "dashboard"}}</a>
+                <a href="/secrets">{{t .Lang "financial_info"}}</a>
+                <a href="/documents">{{t .Lang "documents"}}</a>
+                <a href="/recipients">{{t .Lang "recipients"}}</a>
+                <a href="/settings">{{t .Lang "settings"}}</a>
+                <a href="/logout">{{t .Lang "logout"}}</a>
+                <div class="lang-switcher">
+                    <button class="lang-switcher-button" type="button" aria-haspopup="true" aria-expanded="false">
+                        <span class="lang-switcher-globe" aria-hidden="true">🌐</span>
+                        <span class="lang-switcher-current">{{if eq .Lang "en"}}{{t .Lang "language_en"}}{{else}}{{t .Lang "language_ja"}}{{end}}</span>
+                        <span class="lang-switcher-caret" aria-hidden="true">▾</span>
+                    </button>
+                    <div class="lang-switcher-menu" role="menu">
+                        <a href="{{languageURL "ja" .RequestPath}}" role="menuitem"{{if eq .Lang "ja"}} aria-current="true" class="active"{{end}}>{{t .Lang "language_ja"}}</a>
+                        <a href="{{languageURL "en" .RequestPath}}" role="menuitem"{{if eq .Lang "en"}} aria-current="true" class="active"{{end}}>{{t .Lang "language_en"}}</a>
+                    </div>
+                </div>
+            </nav>
+            {{else}}
+            <nav>
+                <div class="lang-switcher">
+                    <button class="lang-switcher-button" type="button" aria-haspopup="true" aria-expanded="false">
+                        <span class="lang-switcher-globe" aria-hidden="true">🌐</span>
+                        <span class="lang-switcher-current">{{if eq .Lang "en"}}{{t .Lang "language_en"}}{{else}}{{t .Lang "language_ja"}}{{end}}</span>
+                        <span class="lang-switcher-caret" aria-hidden="true">▾</span>
+                    </button>
+                    <div class="lang-switcher-menu" role="menu">
+                        <a href="{{languageURL "ja" .RequestPath}}" role="menuitem"{{if eq .Lang "ja"}} aria-current="true" class="active"{{end}}>{{t .Lang "language_ja"}}</a>
+                        <a href="{{languageURL "en" .RequestPath}}" role="menuitem"{{if eq .Lang "en"}} aria-current="true" class="active"{{end}}>{{t .Lang "language_en"}}</a>
+                    </div>
+                </div>
             </nav>
             {{end}}
         </div>
@@ -30,7 +55,7 @@
         {{.Content}}
     </main>
     <footer class="container">
-        <p>ローカル専用 {{appName}}</p>
+        <p>{{t .Lang "local_only"}} {{.AppName}}</p>
     </footer>
     <script>
         function togglePasswordVisibility(button) {
@@ -38,10 +63,10 @@
             var input = document.getElementById(targetId);
             if (input.type === 'password') {
                 input.type = 'text';
-                button.textContent = '非表示';
+                button.textContent = '{{t .Lang "hide"}}';
             } else {
                 input.type = 'password';
-                button.textContent = '表示';
+                button.textContent = '{{t .Lang "show"}}';
             }
         }
 
@@ -90,11 +115,52 @@
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: params.toString()
                 }).catch(function (err) {
-                    console.error('並び順の保存に失敗しました', err);
+                    console.error('{{t .Lang "reorder_save_failed"}}', err);
                 });
             }
 
             document.querySelectorAll('.sortable-table').forEach(initSortableTable);
+        })();
+
+        (function () {
+            var switchers = document.querySelectorAll('.lang-switcher');
+            switchers.forEach(function (switcher) {
+                var button = switcher.querySelector('.lang-switcher-button');
+                var menu = switcher.querySelector('.lang-switcher-menu');
+                if (!button || !menu) return;
+
+                function open() {
+                    switcher.classList.add('open');
+                    button.setAttribute('aria-expanded', 'true');
+                }
+
+                function close() {
+                    switcher.classList.remove('open');
+                    button.setAttribute('aria-expanded', 'false');
+                }
+
+                button.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    if (switcher.classList.contains('open')) {
+                        close();
+                    } else {
+                        open();
+                    }
+                });
+
+                document.addEventListener('click', function (e) {
+                    if (!switcher.contains(e.target)) {
+                        close();
+                    }
+                });
+
+                document.addEventListener('keydown', function (e) {
+                    if (e.key === 'Escape') {
+                        close();
+                        button.focus();
+                    }
+                });
+            });
         })();
     </script>
 </body>

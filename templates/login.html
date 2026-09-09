@@ -1,13 +1,13 @@
-{{define "login_title"}}ログイン{{end}}
+{{define "login_title"}}{{t .Lang "login"}}{{end}}
 {{define "login_content"}}
 <div class="card">
-    <h2>ログイン</h2>
+    <h2>{{t .Lang "login"}}</h2>
     <form method="post" action="/login">
         <div class="form-group">
-            <label for="password">パスワード</label>
+            <label for="password">{{t .Lang "password"}}</label>
             <input type="password" id="password" name="password" required autofocus>
         </div>
-        <button type="submit" class="btn btn-primary">ログイン</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "login"}}</button>
     </form>
 </div>
 {{end}}

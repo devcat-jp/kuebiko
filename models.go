@@ -116,6 +116,9 @@ type Document struct {
 
 // AppData is passed to templates.
 type AppData struct {
+	Lang          string
+	RequestPath   string
+	AppName       string
 	User          *User
 	Flash         string
 	FlashType     string

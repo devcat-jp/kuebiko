@@ -1,18 +1,18 @@
-{{define "recipient_form_title"}}{{if .Recipient}}受信者編集{{else}}受信者追加{{end}}{{end}}
+{{define "recipient_form_title"}}{{if .Recipient}}{{t .Lang "recipient_edit"}}{{else}}{{t .Lang "recipient_add"}}{{end}}{{end}}
 {{define "recipient_form_content"}}
 <div class="card">
-    <h2>{{if .Recipient}}受信者編集{{else}}受信者追加{{end}}</h2>
+    <h2>{{if .Recipient}}{{t .Lang "recipient_edit"}}{{else}}{{t .Lang "recipient_add"}}{{end}}</h2>
     <form method="post" action="{{if .Recipient}}/recipients/edit?id={{.Recipient.ID}}{{else}}/recipients/new{{end}}">
         <div class="form-group">
-            <label for="name">名前</label>
+            <label for="name">{{t .Lang "name"}}</label>
             <input type="text" id="name" name="name" value="{{if .Recipient}}{{.Recipient.Name}}{{end}}">
         </div>
         <div class="form-group">
-            <label for="email">メールアドレス</label>
+            <label for="email">{{t .Lang "email_address"}}</label>
             <input type="email" id="email" name="email" value="{{if .Recipient}}{{.Recipient.Email}}{{end}}" required>
         </div>
-        <button type="submit" class="btn btn-primary">保存</button>
-        <a href="/recipients" class="btn">キャンセル</a>
+        <button type="submit" class="btn btn-primary">{{t .Lang "save"}}</button>
+        <a href="/recipients" class="btn">{{t .Lang "cancel"}}</a>
     </form>
 </div>
 {{end}}

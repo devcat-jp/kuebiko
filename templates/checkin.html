@@ -1,8 +1,8 @@
-{{define "checkin_title"}}生存確認完了{{end}}
+{{define "checkin_title"}}{{t .Lang "checkin_complete"}}{{end}}
 {{define "checkin_content"}}
 <div class="card status-card">
-    <h2>生存確認を更新しました</h2>
-    <p>次回の確認期限が延長されました。</p>
-    <p>このページは閉じて構いません。</p>
+    <h2>{{t .Lang "checkin_updated"}}</h2>
+    <p>{{t .Lang "next_deadline_extended"}}</p>
+    <p>{{t .Lang "close_page"}}</p>
 </div>
 {{end}}

@@ -1,34 +1,34 @@
-{{define "dashboard_title"}}ダッシュボード{{end}}
+{{define "dashboard_title"}}{{t .Lang "dashboard"}}{{end}}
 {{define "dashboard_content"}}
-<h2>ダッシュボード</h2>
+<h2>{{t .Lang "dashboard"}}</h2>
 
 <div class="card status-card {{if .IsOverdue}}status-danger{{else}}status-ok{{end}}">
-    <h3>ステータス</h3>
+    <h3>{{t .Lang "status"}}</h3>
     {{if .User.IsTriggered}}
-        <p class="status-text">{{appName}}は作動済みです。次回の生存確認でリセットされます。</p>
+        <p class="status-text">{{.AppName}}{{t .Lang "triggered_status"}}</p>
     {{else if .IsOverdue}}
-        <p class="status-text">期限を過ぎています。まもなくメールが送信されます。</p>
+        <p class="status-text">{{t .Lang "overdue_status"}}</p>
     {{else}}
-        <p class="status-text">正常です。期限内に生存確認を行ってください。</p>
+        <p class="status-text">{{t .Lang "healthy_status"}}</p>
     {{end}}
 
     {{if .User.LastCheckInAt}}
-    <p>前回の生存確認: <strong>{{.User.LastCheckInAt.Format "2006-01-02 15:04"}}</strong></p>
-    <p>確認間隔: <strong>{{.User.CheckInIntervalHours}} 時間</strong></p>
-    <p>次回期限: <strong>{{.Deadline.Format "2006-01-02 15:04"}}</strong></p>
+    <p>{{t .Lang "last_checkin"}}: <strong>{{.User.LastCheckInAt.Format "2006-01-02 15:04"}}</strong></p>
+    <p>{{t .Lang "checkin_interval"}}: <strong>{{.User.CheckInIntervalHours}} {{t .Lang "hours"}}</strong></p>
+    <p>{{t .Lang "next_deadline"}}: <strong>{{.Deadline.Format "2006-01-02 15:04"}}</strong></p>
     {{else}}
-    <p>生存確認がまだ行われていません。</p>
+    <p>{{t .Lang "no_checkin"}}</p>
     {{end}}
 </div>
 
 <div class="card">
-    <h3>生存確認</h3>
+    <h3>{{t .Lang "checkin"}}</h3>
     <form method="post" action="/checkin">
         <div class="form-group">
-            <label for="interval">次回までの間隔（時間）</label>
+            <label for="interval">{{t .Lang "next_interval"}}</label>
             <input type="number" id="interval" name="interval" value="{{.User.CheckInIntervalHours}}" min="1" required>
         </div>
-        <button type="submit" class="btn btn-primary">今すぐ生存確認</button>
+        <button type="submit" class="btn btn-primary">{{t .Lang "checkin_now"}}</button>
     </form>
 </div>
 {{end}}

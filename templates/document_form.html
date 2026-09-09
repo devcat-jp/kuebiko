@@ -1,18 +1,18 @@
-{{define "document_form_title"}}{{if .Document}}ドキュメント編集{{else}}ドキュメント追加{{end}}{{end}}
+{{define "document_form_title"}}{{if .Document}}{{t .Lang "document_edit"}}{{else}}{{t .Lang "document_add"}}{{end}}{{end}}
 {{define "document_form_content"}}
 <div class="card">
-    <h2>{{if .Document}}ドキュメント編集{{else}}ドキュメント追加{{end}}</h2>
+    <h2>{{if .Document}}{{t .Lang "document_edit"}}{{else}}{{t .Lang "document_add"}}{{end}}</h2>
     <form method="post" action="{{if .Document}}/documents/edit?id={{.Document.ID}}{{else}}/documents/new{{end}}">
         <div class="form-group">
-            <label for="title">タイトル</label>
+            <label for="title">{{t .Lang "title"}}</label>
             <input type="text" id="title" name="title" value="{{if .Document}}{{.Document.Title}}{{end}}" required>
         </div>
         <div class="form-group">
-            <label for="content">内容（Markdown）</label>
+            <label for="content">{{t .Lang "content_markdown"}}</label>
             <textarea id="content" name="content" rows="20" required>{{if .Document}}{{.Document.Content}}{{end}}</textarea>
         </div>
-        <button type="submit" class="btn btn-primary">保存</button>
-        <a href="/documents" class="btn">キャンセル</a>
+        <button type="submit" class="btn btn-primary">{{t .Lang "save"}}</button>
+        <a href="/documents" class="btn">{{t .Lang "cancel"}}</a>
     </form>
 </div>
 {{end}}
