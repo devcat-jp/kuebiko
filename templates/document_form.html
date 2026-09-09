@@ -1,7 +1,7 @@
-{{define "document_form_title"}}{{if .Document}}{{t .Lang "document_edit"}}{{else}}{{t .Lang "document_add"}}{{end}}{{end}}
+{{define "document_form_title"}}{{if .Document}}{{t .Lang "memo_edit"}}{{else}}{{t .Lang "memo_add"}}{{end}}{{end}}
 {{define "document_form_content"}}
 <div class="card">
-    <h2>{{if .Document}}{{t .Lang "document_edit"}}{{else}}{{t .Lang "document_add"}}{{end}}</h2>
+    <h2>{{if .Document}}{{t .Lang "memo_edit"}}{{else}}{{t .Lang "memo_add"}}{{end}}</h2>
     <form method="post" action="{{if .Document}}/documents/edit?id={{.Document.ID}}{{else}}/documents/new{{end}}">
         <div class="form-group">
             <label for="title">{{t .Lang "title"}}</label>

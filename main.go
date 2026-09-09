@@ -106,6 +106,18 @@ func main() {
 	mux.HandleFunc("/secrets/delete", app.authMiddleware(app.secretDeleteHandler))
 	mux.HandleFunc("/secrets/view", app.authMiddleware(app.secretViewHandler))
 	mux.HandleFunc("/secrets/reorder", app.authMiddleware(app.secretsReorderHandler))
+	mux.HandleFunc("/insurance", app.authMiddleware(app.insuranceHandler))
+	mux.HandleFunc("/insurance/new", app.authMiddleware(app.insuranceNewHandler))
+	mux.HandleFunc("/insurance/edit", app.authMiddleware(app.insuranceEditHandler))
+	mux.HandleFunc("/insurance/delete", app.authMiddleware(app.insuranceDeleteHandler))
+	mux.HandleFunc("/insurance/view", app.authMiddleware(app.insuranceViewHandler))
+	mux.HandleFunc("/insurance/reorder", app.authMiddleware(app.insuranceReorderHandler))
+	mux.HandleFunc("/subscriptions", app.authMiddleware(app.subscriptionHandler))
+	mux.HandleFunc("/subscriptions/new", app.authMiddleware(app.subscriptionNewHandler))
+	mux.HandleFunc("/subscriptions/edit", app.authMiddleware(app.subscriptionEditHandler))
+	mux.HandleFunc("/subscriptions/delete", app.authMiddleware(app.subscriptionDeleteHandler))
+	mux.HandleFunc("/subscriptions/view", app.authMiddleware(app.subscriptionViewHandler))
+	mux.HandleFunc("/subscriptions/reorder", app.authMiddleware(app.subscriptionReorderHandler))
 
 	mux.HandleFunc("/documents", app.authMiddleware(app.documentsHandler))
 	mux.HandleFunc("/documents/new", app.authMiddleware(app.documentNewHandler))
@@ -638,8 +650,70 @@ func (app *App) recipientsReorderHandler(w http.ResponseWriter, r *http.Request)
 
 // Secrets handlers.
 func (app *App) secretsHandler(w http.ResponseWriter, r *http.Request) {
-	list, _ := app.db.ListSecrets()
-	app.render(w, r, "secrets.html", &AppData{Secrets: list})
+	app.secretsByCategoryHandler(w, r, "financial")
+}
+
+func (app *App) secretCategoryPath(category string) string {
+	switch category {
+	case "insurance":
+		return "/insurance"
+	case "subscription":
+		return "/subscriptions"
+	default:
+		return "/secrets"
+	}
+}
+
+func secretCategory(r *http.Request) string {
+	if strings.HasPrefix(r.URL.Path, "/insurance") {
+		return "insurance"
+	}
+	if strings.HasPrefix(r.URL.Path, "/subscriptions") {
+		return "subscription"
+	}
+	return "financial"
+}
+
+func (app *App) secretsByCategoryHandler(w http.ResponseWriter, r *http.Request, category string) {
+	list, _ := app.db.ListSecretsByCategory(category)
+	app.render(w, r, "secrets.html", &AppData{Secrets: list, Category: category})
+}
+
+func (app *App) insuranceHandler(w http.ResponseWriter, r *http.Request) {
+	app.secretsByCategoryHandler(w, r, "insurance")
+}
+func (app *App) subscriptionHandler(w http.ResponseWriter, r *http.Request) {
+	app.secretsByCategoryHandler(w, r, "subscription")
+}
+func (app *App) insuranceNewHandler(w http.ResponseWriter, r *http.Request) {
+	app.secretNewByCategoryHandler(w, r, "insurance")
+}
+func (app *App) subscriptionNewHandler(w http.ResponseWriter, r *http.Request) {
+	app.secretNewByCategoryHandler(w, r, "subscription")
+}
+func (app *App) insuranceEditHandler(w http.ResponseWriter, r *http.Request) {
+	app.secretEditByCategoryHandler(w, r, "insurance")
+}
+func (app *App) subscriptionEditHandler(w http.ResponseWriter, r *http.Request) {
+	app.secretEditByCategoryHandler(w, r, "subscription")
+}
+func (app *App) insuranceDeleteHandler(w http.ResponseWriter, r *http.Request) {
+	app.secretDeleteByCategoryHandler(w, r, "insurance")
+}
+func (app *App) subscriptionDeleteHandler(w http.ResponseWriter, r *http.Request) {
+	app.secretDeleteByCategoryHandler(w, r, "subscription")
+}
+func (app *App) insuranceViewHandler(w http.ResponseWriter, r *http.Request) {
+	app.secretViewByCategoryHandler(w, r, "insurance")
+}
+func (app *App) subscriptionViewHandler(w http.ResponseWriter, r *http.Request) {
+	app.secretViewByCategoryHandler(w, r, "subscription")
+}
+func (app *App) insuranceReorderHandler(w http.ResponseWriter, r *http.Request) {
+	app.secretsReorderByCategoryHandler(w, r, "insurance")
+}
+func (app *App) subscriptionReorderHandler(w http.ResponseWriter, r *http.Request) {
+	app.secretsReorderByCategoryHandler(w, r, "subscription")
 }
 
 func parseSecretForm(r *http.Request) (*SecretPayload, error) {
@@ -672,101 +746,121 @@ func parseSecretForm(r *http.Request) (*SecretPayload, error) {
 }
 
 func (app *App) secretNewHandler(w http.ResponseWriter, r *http.Request) {
+	app.secretNewByCategoryHandler(w, r, "financial")
+}
+
+func (app *App) secretNewByCategoryHandler(w http.ResponseWriter, r *http.Request, category string) {
 	if r.Method == http.MethodGet {
-		app.render(w, r, "secret_form.html", nil)
+		app.render(w, r, "secret_form.html", &AppData{Category: category})
 		return
 	}
 	title := strings.TrimSpace(r.FormValue("title"))
 	if title == "" {
 		setFlash(w, "title_required", "error")
-		app.render(w, r, "secret_form.html", nil)
+		app.render(w, r, "secret_form.html", &AppData{Category: category})
 		return
 	}
 	payload, err := parseSecretForm(r)
 	if err != nil {
 		setFlash(w, "input_invalid", "error")
-		app.render(w, r, "secret_form.html", nil)
+		app.render(w, r, "secret_form.html", &AppData{Category: category})
 		return
 	}
 	content, err := json.Marshal(payload)
 	if err != nil {
 		setFlash(w, "add_failed", "error")
-		app.render(w, r, "secret_form.html", nil)
+		app.render(w, r, "secret_form.html", &AppData{Category: category})
 		return
 	}
-	if err := app.db.CreateSecret(title, string(content)); err != nil {
+	if err := app.db.CreateSecretInCategory(category, title, string(content)); err != nil {
 		setFlash(w, "add_failed", "error")
-		app.render(w, r, "secret_form.html", nil)
+		app.render(w, r, "secret_form.html", &AppData{Category: category})
 		return
 	}
 	setFlash(w, "secret_added", "success")
-	http.Redirect(w, r, "/secrets", http.StatusSeeOther)
+	http.Redirect(w, r, app.secretCategoryPath(category), http.StatusSeeOther)
 }
 
 func (app *App) secretEditHandler(w http.ResponseWriter, r *http.Request) {
+	app.secretEditByCategoryHandler(w, r, "financial")
+}
+
+func (app *App) secretEditByCategoryHandler(w http.ResponseWriter, r *http.Request, category string) {
 	id, _ := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
-	secret, _ := app.db.GetSecret(id)
+	secret, _ := app.db.GetSecretByCategory(id, category)
 	if secret == nil {
-		http.Redirect(w, r, "/secrets", http.StatusSeeOther)
+		http.Redirect(w, r, app.secretCategoryPath(category), http.StatusSeeOther)
 		return
 	}
 	if r.Method == http.MethodGet {
 		payload, _ := secret.ParseSecretPayload()
-		app.render(w, r, "secret_form.html", &AppData{Secret: secret, SecretPayload: payload})
+		app.render(w, r, "secret_form.html", &AppData{Secret: secret, SecretPayload: payload, Category: category})
 		return
 	}
 	title := strings.TrimSpace(r.FormValue("title"))
 	if title == "" {
 		setFlash(w, "title_required", "error")
-		app.render(w, r, "secret_form.html", &AppData{Secret: secret})
+		app.render(w, r, "secret_form.html", &AppData{Secret: secret, Category: category})
 		return
 	}
 	payload, err := parseSecretForm(r)
 	if err != nil {
 		setFlash(w, "input_invalid", "error")
-		app.render(w, r, "secret_form.html", &AppData{Secret: secret})
+		app.render(w, r, "secret_form.html", &AppData{Secret: secret, Category: category})
 		return
 	}
 	content, err := json.Marshal(payload)
 	if err != nil {
 		setFlash(w, "update_failed", "error")
-		app.render(w, r, "secret_form.html", &AppData{Secret: secret})
+		app.render(w, r, "secret_form.html", &AppData{Secret: secret, Category: category})
 		return
 	}
-	if err := app.db.UpdateSecret(id, title, string(content)); err != nil {
+	if err := app.db.UpdateSecretInCategory(id, category, title, string(content)); err != nil {
 		setFlash(w, "update_failed", "error")
 	} else {
 		setFlash(w, "secret_updated", "success")
 	}
-	http.Redirect(w, r, "/secrets", http.StatusSeeOther)
+	http.Redirect(w, r, app.secretCategoryPath(category), http.StatusSeeOther)
 }
 
 func (app *App) secretViewHandler(w http.ResponseWriter, r *http.Request) {
+	app.secretViewByCategoryHandler(w, r, "financial")
+}
+
+func (app *App) secretViewByCategoryHandler(w http.ResponseWriter, r *http.Request, category string) {
 	id, _ := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
-	secret, _ := app.db.GetSecret(id)
+	secret, _ := app.db.GetSecretByCategory(id, category)
 	if secret == nil {
-		http.Redirect(w, r, "/secrets", http.StatusSeeOther)
+		http.Redirect(w, r, app.secretCategoryPath(category), http.StatusSeeOther)
 		return
 	}
 	payload, _ := secret.ParseSecretPayload()
-	app.render(w, r, "secret_view.html", &AppData{Secret: secret, SecretPayload: payload})
+	app.render(w, r, "secret_view.html", &AppData{Secret: secret, SecretPayload: payload, Category: category})
 }
 
 func (app *App) secretDeleteHandler(w http.ResponseWriter, r *http.Request) {
+	app.secretDeleteByCategoryHandler(w, r, "financial")
+}
+
+func (app *App) secretDeleteByCategoryHandler(w http.ResponseWriter, r *http.Request, category string) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	id, _ := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
-	if err := app.db.DeleteSecret(id); err != nil {
+	if err := app.db.DeleteSecretInCategory(id, category); err != nil {
 		setFlash(w, "delete_failed", "error")
 	} else {
 		setFlash(w, "secret_deleted", "success")
 	}
-	http.Redirect(w, r, "/secrets", http.StatusSeeOther)
+	http.Redirect(w, r, app.secretCategoryPath(category), http.StatusSeeOther)
 }
 
 func (app *App) secretsReorderHandler(w http.ResponseWriter, r *http.Request) {
+	app.secretsReorderByCategoryHandler(w, r, "financial")
+}
+
+func (app *App) secretsReorderByCategoryHandler(w http.ResponseWriter, r *http.Request, category string) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
@@ -781,7 +875,7 @@ func (app *App) secretsReorderHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			continue
 		}
-		_ = app.db.UpdateSecretSortOrder(id, i)
+		_ = app.db.UpdateSecretSortOrderInCategory(id, category, i)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -911,16 +1005,24 @@ func (app *App) checkTrigger() {
 		log.Println("overdue check-in detected but no recipients configured")
 		return
 	}
-	secrets, err := app.db.ListSecrets()
+	financial, err := app.db.ListSecretsByCategory("financial")
 	if err != nil {
-		log.Printf("failed to list secrets: %v", err)
+		log.Printf("failed to list financial information: %v", err)
+	}
+	insurance, err := app.db.ListSecretsByCategory("insurance")
+	if err != nil {
+		log.Printf("failed to list insurance information: %v", err)
+	}
+	subscriptions, err := app.db.ListSecretsByCategory("subscription")
+	if err != nil {
+		log.Printf("failed to list subscriptions: %v", err)
 	}
 	documents, err := app.db.ListDocuments()
 	if err != nil {
 		log.Printf("failed to list documents: %v", err)
 	}
 	log.Printf("Overdue action triggered, sending to %d recipient(s)", len(recipients))
-	if err := app.sendTriggerEmail(recipients, secrets, documents); err != nil {
+	if err := app.sendTriggerEmail(recipients, financial, insurance, subscriptions, documents); err != nil {
 		log.Printf("failed to send trigger email: %v", err)
 		return
 	}

@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS recipients (
 
 CREATE TABLE IF NOT EXISTS secrets (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	category TEXT NOT NULL DEFAULT 'financial',
 	title TEXT NOT NULL,
 	content TEXT NOT NULL,
 	created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -90,6 +91,19 @@ CREATE TABLE IF NOT EXISTS documents (
 `
 	if _, err := db.conn.Exec(schema); err != nil {
 		return err
+	}
+	// Older databases do not have the category column. Existing records are
+	// financial information, so migrate them without changing their content.
+	var categoryColumn string
+	err := db.conn.QueryRow("SELECT name FROM pragma_table_info('secrets') WHERE name = 'category'").Scan(&categoryColumn)
+	hasCategory := err == nil && categoryColumn == "category"
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+	if !hasCategory {
+		if _, err := db.conn.Exec("ALTER TABLE secrets ADD COLUMN category TEXT NOT NULL DEFAULT 'financial'"); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -334,7 +348,11 @@ func (db *DB) DeleteRecipient(id int64) error {
 
 // Secret helpers (encrypted at rest).
 func (db *DB) ListSecrets() ([]Secret, error) {
-	rows, err := db.conn.Query("SELECT id, title, content, created_at, updated_at, sort_order FROM secrets ORDER BY sort_order, id")
+	return db.ListSecretsByCategory("financial")
+}
+
+func (db *DB) ListSecretsByCategory(category string) ([]Secret, error) {
+	rows, err := db.conn.Query("SELECT id, category, title, content, created_at, updated_at, sort_order FROM secrets WHERE category = ? ORDER BY sort_order, id", category)
 	if err != nil {
 		return nil, err
 	}
@@ -343,7 +361,7 @@ func (db *DB) ListSecrets() ([]Secret, error) {
 	for rows.Next() {
 		s := Secret{}
 		var ct string
-		if err := rows.Scan(&s.ID, &s.Title, &ct, &s.CreatedAt, &s.UpdatedAt, &s.SortOrder); err != nil {
+		if err := rows.Scan(&s.ID, &s.Category, &s.Title, &ct, &s.CreatedAt, &s.UpdatedAt, &s.SortOrder); err != nil {
 			return nil, err
 		}
 		pt, err := decrypt(ct, db.key)
@@ -358,9 +376,13 @@ func (db *DB) ListSecrets() ([]Secret, error) {
 }
 
 func (db *DB) GetSecret(id int64) (*Secret, error) {
+	return db.GetSecretByCategory(id, "financial")
+}
+
+func (db *DB) GetSecretByCategory(id int64, category string) (*Secret, error) {
 	s := &Secret{}
 	var ct string
-	err := db.conn.QueryRow("SELECT id, title, content, created_at, updated_at, sort_order FROM secrets WHERE id = ?", id).Scan(&s.ID, &s.Title, &ct, &s.CreatedAt, &s.UpdatedAt, &s.SortOrder)
+	err := db.conn.QueryRow("SELECT id, category, title, content, created_at, updated_at, sort_order FROM secrets WHERE id = ? AND category = ?", id, category).Scan(&s.ID, &s.Category, &s.Title, &ct, &s.CreatedAt, &s.UpdatedAt, &s.SortOrder)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -376,20 +398,28 @@ func (db *DB) GetSecret(id int64) (*Secret, error) {
 }
 
 func (db *DB) CreateSecret(title, content string) error {
+	return db.CreateSecretInCategory("financial", title, content)
+}
+
+func (db *DB) CreateSecretInCategory(category, title, content string) error {
 	ct, err := encrypt(content, db.key)
 	if err != nil {
 		return err
 	}
-	_, err = db.conn.Exec("INSERT INTO secrets (title, content, sort_order) VALUES (?, ?, COALESCE((SELECT MAX(sort_order)+1 FROM secrets), 0))", title, ct)
+	_, err = db.conn.Exec("INSERT INTO secrets (category, title, content, sort_order) VALUES (?, ?, ?, COALESCE((SELECT MAX(sort_order)+1 FROM secrets WHERE category = ?), 0))", category, title, ct, category)
 	return err
 }
 
 func (db *DB) UpdateSecret(id int64, title, content string) error {
+	return db.UpdateSecretInCategory(id, "financial", title, content)
+}
+
+func (db *DB) UpdateSecretInCategory(id int64, category, title, content string) error {
 	ct, err := encrypt(content, db.key)
 	if err != nil {
 		return err
 	}
-	_, err = db.conn.Exec("UPDATE secrets SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", title, ct, id)
+	_, err = db.conn.Exec("UPDATE secrets SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND category = ?", title, ct, id, category)
 	return err
 }
 
@@ -398,8 +428,18 @@ func (db *DB) UpdateSecretSortOrder(id int64, sortOrder int) error {
 	return err
 }
 
+func (db *DB) UpdateSecretSortOrderInCategory(id int64, category string, sortOrder int) error {
+	_, err := db.conn.Exec("UPDATE secrets SET sort_order = ? WHERE id = ? AND category = ?", sortOrder, id, category)
+	return err
+}
+
 func (db *DB) DeleteSecret(id int64) error {
 	_, err := db.conn.Exec("DELETE FROM secrets WHERE id = ?", id)
+	return err
+}
+
+func (db *DB) DeleteSecretInCategory(id int64, category string) error {
+	_, err := db.conn.Exec("DELETE FROM secrets WHERE id = ? AND category = ?", id, category)
 	return err
 }
 

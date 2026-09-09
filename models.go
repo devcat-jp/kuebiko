@@ -42,6 +42,7 @@ type Recipient struct {
 // Secret stores login credentials or other sensitive information.
 type Secret struct {
 	ID        int64
+	Category  string
 	Title     string
 	Content   string // encrypted JSON of SecretPayload
 	CreatedAt time.Time
@@ -127,6 +128,7 @@ type AppData struct {
 	AllowedIPs    string
 	Recipients    []Recipient
 	Secrets       []Secret
+	Category      string
 	Documents     []Document
 	Secret        *Secret
 	SecretPayload *SecretPayload

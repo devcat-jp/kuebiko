@@ -12,7 +12,7 @@ import (
 )
 
 // sendTriggerEmail sends the payload to all recipients.
-func (app *App) sendTriggerEmail(recipients []Recipient, secrets []Secret, documents []Document) error {
+func (app *App) sendTriggerEmail(recipients []Recipient, financial, insurance, subscriptions []Secret, documents []Document) error {
 	settings, err := app.db.GetSMTPSettings()
 	if err != nil {
 		return fmt.Errorf("get smtp settings: %w", err)
@@ -34,10 +34,10 @@ func (app *App) sendTriggerEmail(recipients []Recipient, secrets []Secret, docum
 	body.WriteString("==================================================\n")
 	body.WriteString("【金融情報 / シークレット】\n")
 	body.WriteString("==================================================\n\n")
-	if len(secrets) == 0 {
+	if len(financial) == 0 {
 		body.WriteString("登録されているシークレットはありません。\n\n")
 	} else {
-		for _, s := range secrets {
+		for _, s := range financial {
 			body.WriteString(fmt.Sprintf("--- %s ---\n", s.Title))
 			payload, err := s.ParseSecretPayload()
 			if err != nil {
@@ -48,12 +48,34 @@ func (app *App) sendTriggerEmail(recipients []Recipient, secrets []Secret, docum
 			body.WriteString("\n\n")
 		}
 	}
+	writeSecretCategory := func(title, empty string, items []Secret) {
+		body.WriteString("==================================================\n")
+		_, _ = fmt.Fprintln(&body, title)
+		body.WriteString("==================================================\n\n")
+		if len(items) == 0 {
+			_, _ = fmt.Fprintln(&body, empty)
+			body.WriteByte('\n')
+			return
+		}
+		for _, s := range items {
+			body.WriteString(fmt.Sprintf("--- %s ---\n", s.Title))
+			payload, err := s.ParseSecretPayload()
+			if err != nil {
+				body.WriteString(s.Content)
+			} else {
+				body.WriteString(payload.FormatForEmail())
+			}
+			body.WriteString("\n\n")
+		}
+	}
+	writeSecretCategory("【保険情報】", "登録されている保険情報はありません。", insurance)
+	writeSecretCategory("【サブスク】", "登録されているサブスクはありません。", subscriptions)
 
 	body.WriteString("==================================================\n")
-	body.WriteString("【ドキュメント】\n")
+	body.WriteString("【メモ】\n")
 	body.WriteString("==================================================\n\n")
 	if len(documents) == 0 {
-		body.WriteString("登録されているドキュメントはありません。\n\n")
+		body.WriteString("登録されているメモはありません。\n\n")
 	} else {
 		for _, d := range documents {
 			body.WriteString(fmt.Sprintf("--- %s ---\n", d.Title))
@@ -68,7 +90,7 @@ func (app *App) sendTriggerEmail(recipients []Recipient, secrets []Secret, docum
 
 	e.Text = body.Bytes()
 
-	// Attach documents as .md files.
+	// Attach memos as .md files.
 	for _, d := range documents {
 		filename := fmt.Sprintf("%s.md", strings.ReplaceAll(d.Title, " ", "_"))
 		e.Attach(bytes.NewReader([]byte(d.Content)), filename, "text/markdown; charset=utf-8")

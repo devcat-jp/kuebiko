@@ -1,8 +1,7 @@
-{{define "documents_title"}}{{t .Lang "documents"}}{{end}}
+{{define "documents_title"}}{{t .Lang "memos"}}{{end}}
 {{define "documents_content"}}
-<h2>{{t .Lang "documents"}}</h2>
-<p>{{t .Lang "manage_documents"}}</p>
-<a href="/documents/new" class="btn btn-primary">{{t .Lang "add_document"}}</a>
+<h2>{{t .Lang "memos"}}</h2>
+<a href="/documents/new" class="btn btn-primary">{{t .Lang "add_memo"}}</a>
 
 <table class="data-table sortable-table" data-reorder-url="/documents/reorder">
     <thead>
