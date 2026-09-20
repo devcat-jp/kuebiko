@@ -261,7 +261,7 @@ encrypt(plaintext, keyB64 string) // AES-GCM + base64
 - CIDR: `192.168.11.0/24`
 - ワイルドカード: `192.168.11.*`（IPv4 の場合 `/24` と同等）、`fe80::*`（IPv6 の場合 `/16` と同等）
 
-設定画面からの変更は `config.allowed_ips` に保存され、再起動なしで次回リクエストから反映されます。
+設定画面からの変更は `config.allowed_ips` に保存され、再起動なしで次回リクエストから反映されます（`ipFilter` がリクエストごとに設定を解決し、解析結果は設定文字列をキーにキャッシュします）。なお `viewer_links` の `ON DELETE CASCADE` を有効にするため、DSN に `_pragma=foreign_keys(1)` を指定しています。
 
 | 環境変数 | 型 | デフォルト | 用途 |
 |----------|-----|------------|------|
@@ -306,7 +306,9 @@ CGO は不要（modernc.org/sqlite を使用）。
 - 機密データは AES-GCM で暗号化（ただしキーも同 DB に保存）
 - セッション Cookie は HttpOnly
 - テンプレートは html/template を使用し XSS を抑制
+- Markdown レンダリングでは生の HTML を破棄し（`html.SkipHTML`）、`javascript:` / `data:` などの危険なリンクを無効化する
 - SMTP パスワードは DB に平文保存
+- データディレクトリは `0700`、DB・WAL・TLS 秘密鍵は `0600` に制限し、ローカル他ユーザーからの読み取りを防ぐ
 - 自己署名証明書使用時はブラウザで警告が出る
 
 ## 15. 拡張ポイント

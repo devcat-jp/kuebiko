@@ -6,29 +6,38 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 )
 
 // ipFilter wraps a handler and rejects requests from IPs not in the allowed list.
-// It reads allowed networks from the APP_ALLOWED_IPS environment variable first,
-// then falls back to the database config key "allowed_ips". If both are empty,
-// it allows all requests.
+// The list is resolved for every request so that changes saved from the settings
+// page take effect immediately, without restarting the application. The
+// APP_ALLOWED_IPS environment variable takes precedence over the database
+// config key "allowed_ips". If neither is set, all requests are allowed.
 func ipFilter(next http.Handler, db *DB) http.Handler {
-	allowed := os.Getenv("APP_ALLOWED_IPS")
-	if allowed == "" && db != nil {
-		allowed, _ = db.GetConfig("allowed_ips")
-	}
-	if allowed == "" {
-		return next
-	}
-
-	nets, err := parseAllowedNetworks(allowed)
-	if err != nil {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		})
-	}
-
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		allowed := strings.TrimSpace(os.Getenv("APP_ALLOWED_IPS"))
+		if allowed == "" && db != nil {
+			value, err := db.GetConfig("allowed_ips")
+			if err != nil {
+				// Fail closed: never widen access because the stored
+				// restriction could not be read.
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+			allowed = strings.TrimSpace(value)
+		}
+		if allowed == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		nets, err := parseAllowedNetworksCached(allowed)
+		if err != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
 		host, _, err := net.SplitHostPort(r.RemoteAddr)
 		if err != nil {
 			host = r.RemoteAddr
@@ -48,6 +57,29 @@ func ipFilter(next http.Handler, db *DB) http.Handler {
 	})
 }
 
+// ipNetCache memoizes the parsed networks for the most recently used allowed
+// list so the configuration is not re-parsed on every request. The cache is
+// keyed by the exact configuration string, so a settings change is picked up
+// immediately without a restart.
+var (
+	ipNetCacheMu    sync.Mutex
+	ipNetCacheKey   string
+	ipNetCacheValid bool
+	ipNetCacheNets  []*net.IPNet
+	ipNetCacheErr   error
+)
+
+func parseAllowedNetworksCached(s string) ([]*net.IPNet, error) {
+	ipNetCacheMu.Lock()
+	defer ipNetCacheMu.Unlock()
+	if ipNetCacheValid && ipNetCacheKey == s {
+		return ipNetCacheNets, ipNetCacheErr
+	}
+	nets, err := parseAllowedNetworks(s)
+	ipNetCacheKey, ipNetCacheValid, ipNetCacheNets, ipNetCacheErr = s, true, nets, err
+	return nets, err
+}
+
 func parseAllowedNetworks(s string) ([]*net.IPNet, error) {
 	var nets []*net.IPNet
 	for _, part := range strings.Split(s, ",") {
@@ -57,8 +89,12 @@ func parseAllowedNetworks(s string) ([]*net.IPNet, error) {
 		}
 		part = expandIPWildcard(part)
 		if !strings.Contains(part, "/") {
-			// Treat a bare IP as a /32 or /128 host route.
-			part = part + "/32"
+			// Treat a bare IP as a host route: /32 for IPv4, /128 for IPv6.
+			bits := 32
+			if ip := net.ParseIP(part); ip != nil && ip.To4() == nil {
+				bits = 128
+			}
+			part = fmt.Sprintf("%s/%d", part, bits)
 		}
 		_, ipnet, err := net.ParseCIDR(part)
 		if err != nil {

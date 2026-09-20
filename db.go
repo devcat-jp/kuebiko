@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -21,7 +22,10 @@ type DB struct {
 
 // NewDB opens the SQLite database and initializes the schema.
 func NewDB(path, encryptionKey string) (*DB, error) {
-	conn, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_busy_timeout=5000")
+	// foreign_keys(1) is required for the viewer_links ON DELETE CASCADE
+	// constraint to be enforced; SQLite disables foreign keys by default and
+	// the setting is per-connection, so it must be part of the DSN.
+	conn, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_busy_timeout=5000&_pragma=foreign_keys(1)")
 	if err != nil {
 		return nil, err
 	}
@@ -31,6 +35,15 @@ func NewDB(path, encryptionKey string) (*DB, error) {
 	db := &DB{conn: conn, key: encryptionKey}
 	if err := db.createSchema(); err != nil {
 		return nil, err
+	}
+	// Keep the database and its WAL sidecar files private to the owner.
+	// Besides the encrypted secrets, these files hold the SMTP password and
+	// the admin session token, so world-readable permissions would expose
+	// both to any other local user.
+	for _, p := range []string{path, path + "-wal", path + "-shm"} {
+		if err := os.Chmod(p, 0600); err != nil && !os.IsNotExist(err) {
+			log.Printf("failed to restrict permissions on %s: %v", p, err)
+		}
 	}
 	return db, nil
 }
@@ -442,8 +455,21 @@ func (db *DB) UpdateRecipientSortOrder(id int64, sortOrder int) error {
 }
 
 func (db *DB) DeleteRecipient(id int64) error {
-	_, err := db.conn.Exec("DELETE FROM recipients WHERE id = ?", id)
-	return err
+	// Delete the viewer links explicitly as well as relying on ON DELETE
+	// CASCADE. The cascade only runs when foreign key enforcement is on, and
+	// an orphaned link would keep a deleted recipient's viewer URL alive.
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("DELETE FROM viewer_links WHERE recipient_id = ?", id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM recipients WHERE id = ?", id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // Secret helpers (encrypted at rest).

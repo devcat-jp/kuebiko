@@ -142,7 +142,7 @@
   "private_page_disabled_status":"The private page is currently disabled.",
   "private_page_description":"Accessing this URL without logging in updates the check-in using the configured interval.",
   "private_page_warning":"Anyone who knows the URL can update the check-in without logging in.",
-  "ip_help":"Specify comma-separated values. Leave blank to allow all.",
+  "ip_help":"Specify comma-separated values. Leave blank to allow all. Changes apply immediately without a restart.",
   "hide_value":"Hide value",
   "reveal":"Show",
   "conceal":"Hide",
@@ -152,7 +152,7 @@
   ,"view":"View"
   ,"viewer_message":"Message from the administrator"
   ,"viewer_message_settings":"Message for viewers"
-  ,"viewer_message_help":"Markdown is supported."
+  ,"viewer_message_help":"Markdown is supported. Raw HTML is not rendered and unsafe links are disabled."
   ,"viewer_message_saved":"Viewer message saved."
   ,"viewer_message_save_failed":"Failed to save the viewer message."
   ,"viewer_message_intro":"Use the navigation above to browse each category."

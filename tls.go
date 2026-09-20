@@ -32,6 +32,11 @@ func ensureTLSCertificate(dataDir string) (certFile, keyFile string, useTLS bool
 
 	if _, err := os.Stat(certFile); err == nil {
 		if _, err := os.Stat(keyFile); err == nil {
+			// Guard against a world-readable key left over from an earlier
+			// version of the application.
+			if err := os.Chmod(keyFile, 0600); err != nil {
+				return "", "", false, fmt.Errorf("failed to restrict permissions on private key: %w", err)
+			}
 			return certFile, keyFile, true, nil
 		}
 	}
@@ -76,7 +81,8 @@ func generateSelfSignedCert(certFile, keyFile string) error {
 		return err
 	}
 
-	keyOut, err := os.Create(keyFile)
+	// The private key must not be readable by other local users.
+	keyOut, err := os.OpenFile(keyFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
 	}

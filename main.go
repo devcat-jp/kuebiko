@@ -11,11 +11,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gomarkdown/markdown"
+	"github.com/gomarkdown/markdown/ast"
 	"github.com/gomarkdown/markdown/html"
 	"github.com/gomarkdown/markdown/parser"
 )
@@ -45,8 +47,14 @@ func main() {
 	if dataDir == "" {
 		dataDir = "data"
 	}
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
+	if err := os.MkdirAll(dataDir, 0700); err != nil {
 		log.Fatalf("failed to create data directory: %v", err)
+	}
+	// The directory holds the encryption key, the database (with the SMTP
+	// password and session token) and the TLS private key, so keep it private
+	// to the owner even if it already existed with looser permissions.
+	if err := os.Chmod(dataDir, 0700); err != nil {
+		log.Fatalf("failed to restrict data directory permissions: %v", err)
 	}
 
 	key, err := loadOrGenerateEncryptionKey(dataDir)
@@ -267,13 +275,84 @@ func (app *App) render(w http.ResponseWriter, r *http.Request, name string, data
 	}
 }
 
+// urlSchemePattern matches the scheme of an absolute URL.
+var urlSchemePattern = regexp.MustCompile(`^([a-zA-Z][a-zA-Z0-9+.\-]*):`)
+
+// renderMarkdown converts admin-authored Markdown to HTML.
+//
+// Raw HTML is dropped entirely (html.SkipHTML) and link/image destinations are
+// restricted to harmless schemes, because the result is embedded in the viewer
+// pages with template.HTML (unescaped) and would otherwise allow stored XSS in
+// the recipient's browser.
 func renderMarkdown(s string) template.HTML {
 	extensions := parser.CommonExtensions | parser.AutoHeadingIDs | parser.NoEmptyLineBeforeBlock
 	p := parser.NewWithExtensions(extensions)
 	doc := p.Parse([]byte(s))
-	opts := html.RendererOptions{Flags: html.CommonFlags | html.HrefTargetBlank}
+	ast.WalkFunc(doc, sanitizeMarkdownNode)
+	opts := html.RendererOptions{Flags: html.CommonFlags | html.HrefTargetBlank |
+		html.NoreferrerLinks | html.NoopenerLinks | html.SkipHTML}
 	renderer := html.NewRenderer(opts)
 	return template.HTML(markdown.Render(doc, renderer))
+}
+
+// sanitizeMarkdownNode rewrites link and image destinations whose scheme could
+// execute script (javascript:, data:, vbscript:, file:, ...).
+func sanitizeMarkdownNode(node ast.Node, entering bool) ast.WalkStatus {
+	if !entering {
+		return ast.GoToNext
+	}
+	switch n := node.(type) {
+	case *ast.Link:
+		if !isSafeURL(n.Destination, false) {
+			n.Destination = []byte("#")
+			n.AdditionalAttributes = nil
+		}
+	case *ast.Image:
+		if !isSafeURL(n.Destination, true) {
+			n.Destination = nil
+		}
+	}
+	return ast.GoToNext
+}
+
+// isSafeURL reports whether a link or image destination is safe to render.
+// Characters that browsers ignore inside a URL (control characters and spaces)
+// are removed before the scheme is inspected, so "java\tscript:" cannot bypass
+// the check.
+func isSafeURL(dest []byte, isImage bool) bool {
+	var b strings.Builder
+	for _, c := range dest {
+		if c <= 0x20 || c == 0x7f {
+			continue
+		}
+		b.WriteByte(c)
+	}
+	s := b.String()
+	if s == "" || strings.HasPrefix(s, "#") {
+		return true
+	}
+	m := urlSchemePattern.FindStringSubmatch(s)
+	if m == nil {
+		// Relative URL (including protocol-relative); safe to render.
+		return true
+	}
+	switch strings.ToLower(m[1]) {
+	case "http", "https", "mailto", "tel":
+		return true
+	case "data":
+		if !isImage {
+			return false
+		}
+		lower := strings.ToLower(s)
+		for _, prefix := range []string{"data:image/png", "data:image/jpeg", "data:image/jpg", "data:image/gif", "data:image/webp"} {
+			if strings.HasPrefix(lower, prefix) {
+				return true
+			}
+		}
+		return false
+	default:
+		return false
+	}
 }
 
 // Setup handler (first run only).
@@ -726,8 +805,9 @@ func (app *App) settingsHandler(w http.ResponseWriter, r *http.Request) {
 				setFlash(w, "settings_saved", "success")
 			}
 		}
-		viewerMessage, _ = app.db.GetViewerMessage()
-		app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: newSettings, AllowedIPs: newAllowedIPs, EffectiveAllowedIPs: effectiveAllowedIPs, AllowedIPsEnv: allowedIPsEnv != "", CheckInURL: checkInURLValue, ViewerMessage: viewerMessage})
+		// Redirect after a successful save so the reloaded page shows the
+		// value that is now actually enforced by the IP filter.
+		http.Redirect(w, r, "/settings", http.StatusSeeOther)
 		return
 	}
 	http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
