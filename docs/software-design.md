@@ -120,14 +120,32 @@ app/
 | created_at | DATETIME | 作成日時 |
 | updated_at | DATETIME | 更新日時 |
 
-### 5.6 config
+### 5.6 viewer_links
+
+受信者ごとに発行する閲覧専用ページのトークンを管理する。トークン本体は保存せず、SHA-256 ハッシュのみを保存する。
+
+| カラム | 型 | 備考 |
+|--------|-----|------|
+| id | INTEGER | PK AUTOINCREMENT |
+| recipient_id | INTEGER | recipients.id（FK、ON DELETE CASCADE） |
+| token_hash | TEXT | トークンの SHA-256 ハッシュ（UNIQUE） |
+| created_at | DATETIME | 作成日時 |
+| expires_at | INTEGER | 有効期限（Unix 秒）。NULL は無期限 |
+| is_test | INTEGER | 0/1、メール送信テストで発行したリンク |
+
+- 作動時は `ClearViewerLinks()` で旧世代を削除してから再発行する
+- 生存確認（管理画面・秘密 URL の両方）で `ClearViewerLinks()` を実行し、現在のリンクを無効化する
+- メール送信テストで発行したリンクは `expires_at` を 1 時間後に設定し、`is_test = 1` で識別する
+- 期限切れリンクは `DeleteExpiredViewerLinks()` で定期削除する
+
+### 5.7 config
 
 | カラム | 型 | 備考 |
 |--------|-----|------|
 | key | TEXT | PK |
 | value | TEXT | 値 |
 
-暗号化キー `encryption_key` を保存する。
+暗号化キー `encryption_key`、生存確認トークン（`checkin_token_hash` / `checkin_token_ciphertext`）、閲覧者向けメッセージ（`viewer_message`、AES-GCM 暗号化済み）、IP 制限（`allowed_ips`）を保存する。
 
 ## 6. 認証フロー
 
@@ -154,25 +172,28 @@ encrypt(plaintext, keyB64 string) // AES-GCM + base64
 
 ## 8. 久延毘古（くえびこ）作動フロー
 
-1. `main()` 内で `watchDeadMansSwitch(interval)` をゴルーチン起動
-2. 指定間隔ごとに `checkTrigger()` を実行（初回は即時実行）
+1. `main()` 内で `watchOverdue(interval)` をゴルーチン起動
+2. 指定間隔ごとに `checkTrigger()` を実行（初回は即時実行）。併せて期限切れテストリンクを削除
 3. `users.email_enabled = 1` かつ `is_triggered = 0` かつ `last_check_in_at` が存在する場合
 4. `last_check_in_at + check_in_interval_hours < now` なら作動
-5. recipients、secrets、documents を DB から取得
-6. `sendTriggerEmail()` でメール送信
-7. 成功したら `users.is_triggered = 1` に更新
-8. ユーザーが生存確認を行うと `is_triggered` が 0 にリセットされる
+5. `ClearViewerLinks()` で旧世代の閲覧リンクを削除
+6. 受信者ごとにトークンを生成し `CreateViewerLink()` で保存、`publicBaseURL()` + `/view/<token>` を本文に記載
+7. `sendViewerEmail()` で受信者ごとに個別送信（本文・添付に情報を載せない）
+8. すべて成功したら `users.is_triggered = 1` に更新
+9. ユーザーが生存確認を行うと `is_triggered` が 0 にリセットされ、閲覧リンクも無効化される
 
 ## 9. メール送信設計
 
-`email.go` の `sendTriggerEmail` が担当。
+`email.go` の `sendViewerEmail` / `sendTestViewerEmail` が担当。
 
-- Subject: `【久延毘古（くえびこ）作動】重要な情報のご連絡`
-- 本文: 説明文 + secrets 一覧 + documents 一覧
-- 添付: documents を `title.md` として添付
+- 本文には受信者専用の閲覧 URL のみを記載し、金融情報・保険情報・サブスク・メモの内容や添付ファイルは含めない
+- 受信者ごとに個別送信するため、他の受信者のアドレスは開示されない
+- 作動時: Subject `【久延毘古（くえびこ）作動】重要なお知らせ`
+- テスト時: Subject `【久延毘古（くえびこ）】メール送信テスト`、URL の有効期限（1 時間）を本文に明記
 - ポート 465 かつ TLS 有効 → `SendWithTLS`
 - それ以外かつ TLS 有効 → `SendWithStartTLS`
 - TLS 無効 → `Send`
+- SMTP ユーザー名が空の場合は AUTH を行わない（認証不要の中継先向け）
 
 ## 10. Web UI 設計
 
@@ -190,10 +211,37 @@ encrypt(plaintext, keyB64 string) // AES-GCM + base64
 | / | dashboard.html | ステータス、生存確認 |
 | /setup | setup.html | 初回管理者作成 |
 | /login | login.html | ログイン |
-| /settings | settings.html | SMTP 設定 |
-| /recipients | recipients.html | 受信者一覧 |
-| /secrets | secrets.html | シークレット一覧 |
-| /documents | documents.html | ドキュメント一覧 |
+| /settings | settings.html | SMTP 設定、閲覧者向けメッセージ、IP 制限 |
+| /recipients | recipients.html | 受信者一覧、メール送信テスト |
+| /secrets | secrets.html | 金融情報一覧 |
+| /insurance | insurance.html | 保険情報一覧 |
+| /subscriptions | subscriptions.html | サブスク一覧 |
+| /documents | documents.html | メモ一覧 |
+
+閲覧専用ページ（管理者ログイン不要、トークン認証）：
+
+| パス | テンプレート | 内容 |
+|------|--------------|------|
+| /view/<token> | viewer_message.html | 管理者メッセージ |
+| /view/<token>/financial | viewer_secrets.html | 金融情報一覧（読み取り専用） |
+| /view/<token>/insurance | viewer_secrets.html | 保険情報一覧（読み取り専用） |
+| /view/<token>/subscriptions | viewer_secrets.html | サブスク一覧（読み取り専用） |
+| /view/<token>/documents | viewer_documents.html | メモ一覧（読み取り専用） |
+| /view/preview | viewer_message.html | 管理者向け確認用（要ログイン、DB に保存しない仮想トークン） |
+
+- カテゴリページはルート（メッセージ）表示後に付与される `viewer_seen` Cookie を要求する
+- `/view/` 配下には編集・削除・追加・並び替え・ログアウト・受信者管理・設定のルートを一切登録しない
+- 管理系ルートはすべて `authMiddleware` で保護される
+
+### 10.1 メール送信テスト
+
+受信者一覧の「テスト送信」から、作動時と同一形式のメールを任意の受信者（または全員）へ送信できる。
+
+- SMTP 設定が未登録の場合は実行せずエラーを表示する
+- 実行前に `DeleteTestViewerLinks()` で旧テストリンクを失効させる
+- 発行するリンクは 1 時間で失効する
+- 「テスト用URLを失効させる」で即時無効化できる
+- 送信結果（成功／一部失敗／失敗）はフラッシュメッセージとログに記録する
 
 ## 11. 環境変数と設定
 

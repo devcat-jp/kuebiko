@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -91,6 +92,7 @@ func main() {
 	// The tokenized path is intentionally not protected by the login middleware.
 	// Possession of the unguessable URL is the authentication mechanism.
 	mux.HandleFunc("/checkin/", app.secretCheckInHandler)
+	mux.HandleFunc("/view/", app.viewerHandler)
 	mux.HandleFunc("/settings", app.authMiddleware(app.settingsHandler))
 	mux.HandleFunc("/settings/checkin", app.authMiddleware(app.settingsCheckInHandler))
 
@@ -99,6 +101,8 @@ func main() {
 	mux.HandleFunc("/recipients/edit", app.authMiddleware(app.recipientEditHandler))
 	mux.HandleFunc("/recipients/delete", app.authMiddleware(app.recipientDeleteHandler))
 	mux.HandleFunc("/recipients/reorder", app.authMiddleware(app.recipientsReorderHandler))
+	mux.HandleFunc("/recipients/test-email", app.authMiddleware(app.recipientsTestEmailHandler))
+	mux.HandleFunc("/recipients/test-email/clear", app.authMiddleware(app.recipientsTestEmailClearHandler))
 
 	mux.HandleFunc("/secrets", app.authMiddleware(app.secretsHandler))
 	mux.HandleFunc("/secrets/new", app.authMiddleware(app.secretNewHandler))
@@ -197,6 +201,34 @@ func loadOrGenerateEncryptionKey(dataDir string) (string, error) {
 	return key, nil
 }
 
+func (app *App) renderViewer(w http.ResponseWriter, r *http.Request, name string, data *AppData) {
+	if data == nil {
+		data = &AppData{}
+	}
+	data.Lang = languageFromRequest(r)
+	data.RequestPath = r.URL.RequestURI()
+	data.AppName = applicationName
+	data.ClientIP = clientIP(r)
+	base := strings.TrimSuffix(name, ".html")
+	var titleBuf, contentBuf bytes.Buffer
+	if err := app.templates.ExecuteTemplate(&titleBuf, base+"_title", data); err != nil {
+		log.Printf("viewer template title error: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	if err := app.templates.ExecuteTemplate(&contentBuf, base+"_content", data); err != nil {
+		log.Printf("viewer template content error: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	data.Title = template.HTML(titleBuf.String())
+	data.Content = template.HTML(contentBuf.String())
+	if err := app.templates.ExecuteTemplate(w, "viewer_layout", data); err != nil {
+		log.Printf("viewer layout error: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
 func (app *App) render(w http.ResponseWriter, r *http.Request, name string, data *AppData) {
 	if data == nil {
 		data = &AppData{}
@@ -206,6 +238,7 @@ func (app *App) render(w http.ResponseWriter, r *http.Request, name string, data
 	data.Lang = languageFromRequest(r)
 	data.RequestPath = r.URL.RequestURI()
 	data.AppName = applicationName
+	data.ClientIP = clientIP(r)
 	flash, flashType := getFlash(w, r)
 	if parts := strings.SplitN(flash, "|", 2); len(parts) == 2 {
 		data.Flash = translate(data.Lang, parts[0]) + parts[1]
@@ -379,6 +412,7 @@ func (app *App) checkInHandler(w http.ResponseWriter, r *http.Request) {
 	if err := app.db.UpdateCheckIn(interval, time.Now()); err != nil {
 		setFlash(w, "checkin_update_failed", "error")
 	} else {
+		_ = app.db.ClearViewerLinks()
 		setFlash(w, "checkin_updated", "success")
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -386,6 +420,33 @@ func (app *App) checkInHandler(w http.ResponseWriter, r *http.Request) {
 
 // checkInURL builds the private URL from the request's origin. The token is
 // only passed to this function from an authenticated settings request.
+// clientIP returns the remote address without its port.
+func clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+func publicBaseURL(r *http.Request) string {
+	if base := strings.TrimRight(os.Getenv("APP_PUBLIC_URL"), "/"); base != "" {
+		return base
+	}
+	scheme := "http"
+	if r != nil && r.TLS != nil {
+		scheme = "https"
+	}
+	if r == nil {
+		port := os.Getenv("APP_PORT")
+		if port == "" {
+			port = "8080"
+		}
+		return scheme + "://localhost:" + port
+	}
+	return scheme + "://" + r.Host
+}
+
 func checkInURL(r *http.Request, token string) string {
 	if token == "" {
 		return ""
@@ -395,6 +456,98 @@ func checkInURL(r *http.Request, token string) string {
 		scheme = "https"
 	}
 	return scheme + "://" + r.Host + "/checkin/" + token
+}
+
+// viewerHandler serves the token-authenticated read-only portal. A viewer
+// must first open the root URL (the message page); category pages then use a
+// short-lived browser cookie so a direct deep link cannot skip the message.
+func (app *App) viewerHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow, noarchive")
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	path := strings.TrimPrefix(r.URL.Path, "/view/")
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) == 0 || parts[0] == "" || strings.Contains(parts[0], "?") {
+		http.NotFound(w, r)
+		return
+	}
+	token := parts[0]
+	// The special preview token is never stored in viewer_links. It is
+	// available only to an authenticated administrator from the settings page.
+	// Every request is checked, including category navigation, so a forged
+	// viewer_seen cookie cannot expose the preview to an unauthenticated user.
+	isPreview := token == "preview"
+	if isPreview {
+		if user, _ := app.currentUser(r); user == nil {
+			http.NotFound(w, r)
+			return
+		}
+	} else {
+		valid, err := app.db.ValidateViewerToken(token)
+		if err != nil {
+			log.Printf("failed to validate viewer token: %v", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		if !valid {
+			http.NotFound(w, r)
+			return
+		}
+	}
+	base := "/view/" + token
+	if len(parts) == 1 {
+		http.SetCookie(w, &http.Cookie{Name: "viewer_seen", Value: token, Path: base, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+		message, _ := app.db.GetViewerMessage()
+		app.renderViewer(w, r, "viewer_message.html", &AppData{ViewerMode: true, ViewerToken: token, ViewerMessage: message})
+		return
+	}
+	seen, _ := r.Cookie("viewer_seen")
+	if !isPreview && (seen == nil || seen.Value != token) {
+		http.Redirect(w, r, base, http.StatusSeeOther)
+		return
+	}
+	category := parts[1]
+	switch category {
+	case "financial", "insurance", "subscriptions":
+		categoryDB := map[string]string{"financial": "financial", "insurance": "insurance", "subscriptions": "subscription"}[category]
+		if len(parts) == 2 {
+			list, _ := app.db.ListSecretsByCategory(categoryDB)
+			app.renderViewer(w, r, "viewer_secrets.html", &AppData{ViewerMode: true, ViewerToken: token, Secrets: list, Category: categoryDB})
+			return
+		}
+		if len(parts) == 3 && parts[2] == "view" {
+			id, _ := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
+			secret, _ := app.db.GetSecretByCategory(id, categoryDB)
+			if secret == nil {
+				http.NotFound(w, r)
+				return
+			}
+			payload, _ := secret.ParseSecretPayload()
+			app.renderViewer(w, r, "viewer_secret_view.html", &AppData{ViewerMode: true, ViewerToken: token, Secret: secret, SecretPayload: payload, Category: categoryDB})
+			return
+		}
+	case "documents":
+		if len(parts) == 2 {
+			list, _ := app.db.ListDocuments()
+			app.renderViewer(w, r, "viewer_documents.html", &AppData{ViewerMode: true, ViewerToken: token, Documents: list})
+			return
+		}
+		if len(parts) == 3 && parts[2] == "preview" {
+			id, _ := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
+			doc, _ := app.db.GetDocument(id)
+			if doc == nil {
+				http.NotFound(w, r)
+				return
+			}
+			app.renderViewer(w, r, "viewer_document_preview.html", &AppData{ViewerMode: true, ViewerToken: token, Document: doc})
+			return
+		}
+	}
+	http.NotFound(w, r)
 }
 
 // secretCheckInHandler authenticates solely by possession of the unguessable
@@ -432,6 +585,7 @@ func (app *App) secretCheckInHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+	_ = app.db.ClearViewerLinks()
 	app.render(w, r, "checkin.html", nil)
 }
 
@@ -468,47 +622,64 @@ func (app *App) settingsCheckInHandler(w http.ResponseWriter, r *http.Request) {
 // Settings handler (SMTP, email toggle, and IP restrictions).
 func (app *App) settingsHandler(w http.ResponseWriter, r *http.Request) {
 	user, _ := app.db.GetUser()
+	viewerMessage, _ := app.db.GetViewerMessage()
 	settings, _ := app.db.GetSMTPSettings()
 	if settings == nil {
 		settings = &SMTPSettings{Host: "smtp.gmail.com", Port: 587, UseTLS: true}
 	}
 	allowedIPs, _ := app.db.GetConfig("allowed_ips")
+	allowedIPsEnv := os.Getenv("APP_ALLOWED_IPS")
+	// The effective value is what the filter actually applies: the environment
+	// variable wins over the database value when both are set.
+	effectiveAllowedIPs := allowedIPs
+	if allowedIPsEnv != "" {
+		effectiveAllowedIPs = allowedIPsEnv
+	}
 	checkInToken, _ := app.db.GetCheckInToken()
 	checkInURLValue := checkInURL(r, checkInToken)
 	if r.Method == http.MethodGet {
-		app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, CheckInURL: checkInURLValue})
+		app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, EffectiveAllowedIPs: effectiveAllowedIPs, AllowedIPsEnv: allowedIPsEnv != "", CheckInURL: checkInURLValue, ViewerMessage: viewerMessage})
 		return
 	}
 	if r.Method == http.MethodPost {
 		action := r.FormValue("action")
+		if action == "save_viewer_message" {
+			if err := app.db.SetViewerMessage(r.FormValue("viewer_message")); err != nil {
+				setFlash(w, "viewer_message_save_failed", "error")
+			} else {
+				setFlash(w, "viewer_message_saved", "success")
+			}
+			http.Redirect(w, r, "/settings", http.StatusSeeOther)
+			return
+		}
 		if action == "change_password" {
 			currentPassword := r.FormValue("current_password")
 			newPassword := r.FormValue("new_password")
 			confirmPassword := r.FormValue("confirm_password")
 			if currentPassword == "" || newPassword == "" || confirmPassword == "" {
 				setFlash(w, "password_fields_required", "error")
-				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, CheckInURL: checkInURLValue})
+				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, AllowedIPsEnv: allowedIPsEnv != "", CheckInURL: checkInURLValue})
 				return
 			}
 			if !checkPassword(currentPassword, user.PasswordHash) {
 				setFlash(w, "current_password_incorrect", "error")
-				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, CheckInURL: checkInURLValue})
+				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, AllowedIPsEnv: allowedIPsEnv != "", CheckInURL: checkInURLValue})
 				return
 			}
 			if newPassword != confirmPassword {
 				setFlash(w, "new_password_mismatch", "error")
-				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, CheckInURL: checkInURLValue})
+				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, AllowedIPsEnv: allowedIPsEnv != "", CheckInURL: checkInURLValue})
 				return
 			}
 			hash, err := hashPassword(newPassword)
 			if err != nil {
 				setFlash(w, "password_hash_failed", "error")
-				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, CheckInURL: checkInURLValue})
+				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, AllowedIPsEnv: allowedIPsEnv != "", CheckInURL: checkInURLValue})
 				return
 			}
 			if err := app.db.UpdateUserPassword(hash); err != nil {
 				setFlash(w, "password_change_failed", "error")
-				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, CheckInURL: checkInURLValue})
+				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, AllowedIPsEnv: allowedIPsEnv != "", CheckInURL: checkInURLValue})
 				return
 			}
 			setFlash(w, "password_changed", "success")
@@ -526,13 +697,13 @@ func (app *App) settingsHandler(w http.ResponseWriter, r *http.Request) {
 		newAllowedIPs := strings.TrimSpace(r.FormValue("allowed_ips"))
 		if host == "" || port == 0 || username == "" || from == "" {
 			setFlash(w, "smtp_required", "error")
-			app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: newAllowedIPs, CheckInURL: checkInURLValue})
+			app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: newAllowedIPs, AllowedIPsEnv: allowedIPsEnv != "", CheckInURL: checkInURLValue})
 			return
 		}
 		if newAllowedIPs != "" {
 			if _, err := parseAllowedNetworks(newAllowedIPs); err != nil {
 				setFlash(w, "allowed_ip_invalid|"+err.Error(), "error")
-				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: newAllowedIPs, CheckInURL: checkInURLValue})
+				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: newAllowedIPs, AllowedIPsEnv: allowedIPsEnv != "", CheckInURL: checkInURLValue})
 				return
 			}
 		}
@@ -555,7 +726,8 @@ func (app *App) settingsHandler(w http.ResponseWriter, r *http.Request) {
 				setFlash(w, "settings_saved", "success")
 			}
 		}
-		app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: newSettings, AllowedIPs: newAllowedIPs, CheckInURL: checkInURLValue})
+		viewerMessage, _ = app.db.GetViewerMessage()
+		app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: newSettings, AllowedIPs: newAllowedIPs, EffectiveAllowedIPs: effectiveAllowedIPs, AllowedIPsEnv: allowedIPsEnv != "", CheckInURL: checkInURLValue, ViewerMessage: viewerMessage})
 		return
 	}
 	http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -624,6 +796,110 @@ func (app *App) recipientDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		setFlash(w, "delete_failed", "error")
 	} else {
 		setFlash(w, "recipient_deleted", "success")
+	}
+	http.Redirect(w, r, "/recipients", http.StatusSeeOther)
+}
+
+// testViewerLinkValidity limits how long an email test link stays usable.
+const testViewerLinkValidity = time.Hour
+
+// recipientsTestEmailHandler sends the real trigger message to one recipient
+// (or all of them) with a short-lived test link so SMTP delivery and the
+// viewer portal can be verified without waiting for an actual overdue event.
+func (app *App) recipientsTestEmailHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	settings, err := app.db.GetSMTPSettings()
+	if err != nil || settings == nil || strings.TrimSpace(settings.Host) == "" {
+		setFlash(w, "test_email_smtp_required", "error")
+		http.Redirect(w, r, "/recipients", http.StatusSeeOther)
+		return
+	}
+
+	list, err := app.db.ListRecipients()
+	if err != nil || len(list) == 0 {
+		setFlash(w, "test_email_no_recipients", "error")
+		http.Redirect(w, r, "/recipients", http.StatusSeeOther)
+		return
+	}
+
+	targets := list
+	if idStr := r.URL.Query().Get("id"); idStr != "" && idStr != "all" {
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			setFlash(w, "test_email_failed", "error")
+			http.Redirect(w, r, "/recipients", http.StatusSeeOther)
+			return
+		}
+		targets = nil
+		for _, recipient := range list {
+			if recipient.ID == id {
+				targets = append(targets, recipient)
+				break
+			}
+		}
+		if len(targets) == 0 {
+			setFlash(w, "test_email_failed", "error")
+			http.Redirect(w, r, "/recipients", http.StatusSeeOther)
+			return
+		}
+	}
+
+	// Discard links from previous tests before issuing fresh, short-lived ones.
+	if err := app.db.DeleteTestViewerLinks(); err != nil {
+		log.Printf("failed to clear previous test viewer links: %v", err)
+	}
+
+	base := publicBaseURL(r)
+	sent := 0
+	var lastErr error
+	for _, recipient := range targets {
+		token, err := generateViewerToken()
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		expiresAt := time.Now().Add(testViewerLinkValidity)
+		if err := app.db.CreateViewerLinkWithExpiry(recipient.ID, token, expiresAt, true); err != nil {
+			lastErr = err
+			continue
+		}
+		viewerURL := base + "/view/" + token
+		if err := app.sendTestViewerEmail(recipient, viewerURL, testViewerLinkValidity); err != nil {
+			lastErr = err
+			log.Printf("failed to send test viewer email to recipient %d: %v", recipient.ID, err)
+			continue
+		}
+		sent++
+	}
+
+	switch {
+	case sent == 0:
+		if lastErr != nil {
+			log.Printf("test email failed: %v", lastErr)
+		}
+		setFlash(w, "test_email_failed", "error")
+	case sent < len(targets):
+		log.Printf("test viewer email: sent %d of %d", sent, len(targets))
+		setFlash(w, "test_email_partial", "error")
+	default:
+		setFlash(w, "test_email_sent", "success")
+	}
+	http.Redirect(w, r, "/recipients", http.StatusSeeOther)
+}
+
+// recipientsTestEmailClearHandler revokes every outstanding test link.
+func (app *App) recipientsTestEmailClearHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := app.db.DeleteTestViewerLinks(); err != nil {
+		setFlash(w, "test_email_clear_failed", "error")
+	} else {
+		setFlash(w, "test_email_cleared", "success")
 	}
 	http.Redirect(w, r, "/recipients", http.StatusSeeOther)
 }
@@ -983,8 +1259,10 @@ func (app *App) watchOverdue(interval time.Duration) {
 	defer ticker.Stop()
 	// Run immediately on startup too.
 	app.checkTrigger()
+	app.db.DeleteExpiredViewerLinks()
 	for range ticker.C {
 		app.checkTrigger()
+		app.db.DeleteExpiredViewerLinks()
 	}
 }
 
@@ -1005,26 +1283,28 @@ func (app *App) checkTrigger() {
 		log.Println("overdue check-in detected but no recipients configured")
 		return
 	}
-	financial, err := app.db.ListSecretsByCategory("financial")
-	if err != nil {
-		log.Printf("failed to list financial information: %v", err)
-	}
-	insurance, err := app.db.ListSecretsByCategory("insurance")
-	if err != nil {
-		log.Printf("failed to list insurance information: %v", err)
-	}
-	subscriptions, err := app.db.ListSecretsByCategory("subscription")
-	if err != nil {
-		log.Printf("failed to list subscriptions: %v", err)
-	}
-	documents, err := app.db.ListDocuments()
-	if err != nil {
-		log.Printf("failed to list documents: %v", err)
-	}
-	log.Printf("Overdue action triggered, sending to %d recipient(s)", len(recipients))
-	if err := app.sendTriggerEmail(recipients, financial, insurance, subscriptions, documents); err != nil {
-		log.Printf("failed to send trigger email: %v", err)
+	// Replace any links from a previous failed/incomplete attempt before
+	// issuing a fresh generation of recipient-specific links.
+	if err := app.db.ClearViewerLinks(); err != nil {
+		log.Printf("failed to clear viewer links: %v", err)
 		return
+	}
+	log.Printf("Overdue action triggered, sending viewer links to %d recipient(s)", len(recipients))
+	for _, recipient := range recipients {
+		token, err := generateViewerToken()
+		if err != nil {
+			log.Printf("failed to generate viewer token: %v", err)
+			return
+		}
+		if err := app.db.CreateViewerLink(recipient.ID, token); err != nil {
+			log.Printf("failed to save viewer link: %v", err)
+			return
+		}
+		viewerURL := publicBaseURL(nil) + "/view/" + token
+		if err := app.sendViewerEmail(recipient, viewerURL); err != nil {
+			log.Printf("failed to send viewer email to recipient %d: %v", recipient.ID, err)
+			return
+		}
 	}
 	if err := app.db.MarkTriggered(); err != nil {
 		log.Printf("failed to mark triggered: %v", err)

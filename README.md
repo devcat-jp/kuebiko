@@ -29,5 +29,6 @@ go build -o app.exe .
 | `APP_TLS_CERT` | サーバー証明書ファイルパス | 未設定 |
 | `APP_TLS_KEY` | サーバー秘密鍵ファイルパス | 未設定 |
 | `APP_ALLOWED_IPS` | アクセスを許可する IP 範囲（カンマ区切り） | 未設定（すべて許可） |
+| `APP_PUBLIC_URL` | 閲覧専用ページのメール掲載用公開URL | 未設定（`APP_HOST`等から生成） |
 
 詳細は [docs/user-manual.md](docs/user-manual.md) を参照してください。

@@ -71,7 +71,46 @@
 </div>
 
 <div class="card">
+    <h3>{{t .Lang "viewer_message_settings"}}</h3>
+    <form method="post" action="/settings">
+        <input type="hidden" name="action" value="save_viewer_message">
+        <div class="form-group">
+            <label for="viewer_message">{{t .Lang "viewer_message"}}</label>
+            <textarea id="viewer_message" name="viewer_message" rows="8">{{.ViewerMessage}}</textarea>
+            <small>{{t .Lang "viewer_message_help"}}</small>
+        </div>
+        <button type="submit" class="btn btn-primary">{{t .Lang "save"}}</button>
+    </form>
+</div>
+
+<div class="card">
+    <h3>{{t .Lang "viewer_preview"}}</h3>
+    <p>{{t .Lang "viewer_preview_description"}}</p>
+    <a class="btn btn-primary" href="/view/preview" target="_blank" rel="noopener">{{t .Lang "open_viewer_preview"}}</a>
+</div>
+
+<div class="card">
     <h3>{{t .Lang "access_restriction"}}</h3>
+
+    <div class="current-settings">
+        <h4>{{t .Lang "current_access_restriction"}}</h4>
+        <div class="view-row">
+            <span class="view-label">{{t .Lang "effective_allowed_ips"}}</span>
+            {{if .EffectiveAllowedIPs}}
+            <span class="view-value">{{.EffectiveAllowedIPs}}</span>
+            {{else}}
+            <span class="view-value">{{t .Lang "allow_all_ips"}}</span>
+            {{end}}
+        </div>
+        <div class="view-row">
+            <span class="view-label">{{t .Lang "current_connection_ip"}}</span>
+            <span class="view-value">{{.ClientIP}}</span>
+        </div>
+        {{if .AllowedIPsEnv}}
+        <p class="meta">{{t .Lang "allowed_ips_env_active"}}</p>
+        {{end}}
+    </div>
+
     <form method="post" action="/settings">
         <div class="form-group">
             <label for="allowed_ips">{{t .Lang "allowed_ips"}}</label>

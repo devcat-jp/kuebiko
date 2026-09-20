@@ -1,0 +1,39 @@
+{{define "viewer_layout"}}
+<!DOCTYPE html>
+<html lang="{{.Lang}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow, noarchive">
+    <title>{{.Title}} - {{.AppName}}</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+    <div class="container">
+        <h1>{{.AppName}}</h1>
+        <nav>
+            <a href="/view/{{.ViewerToken}}">{{t .Lang "viewer_message"}}</a>
+            <a href="/view/{{.ViewerToken}}/financial">{{t .Lang "financial_info"}}</a>
+            <a href="/view/{{.ViewerToken}}/insurance">{{t .Lang "insurance_info"}}</a>
+            <a href="/view/{{.ViewerToken}}/subscriptions">{{t .Lang "subscriptions"}}</a>
+            <a href="/view/{{.ViewerToken}}/documents">{{t .Lang "memos"}}</a>
+            <span class="lang-switcher">
+                <a href="{{languageURL "ja" .RequestPath}}">{{t .Lang "language_ja"}}</a>
+                <a href="{{languageURL "en" .RequestPath}}">{{t .Lang "language_en"}}</a>
+            </span>
+        </nav>
+    </div>
+</header>
+<main class="container">{{.Content}}</main>
+<footer class="container"><p>{{t .Lang "viewer_read_only"}}</p></footer>
+<script>
+function toggleReveal(btn) {
+    const input = btn.parentElement.querySelector('.secret-input');
+    if (input.type === 'password') { input.type = 'text'; btn.textContent = '🙈'; }
+    else { input.type = 'password'; btn.textContent = '👁'; }
+}
+</script>
+</body>
+</html>
+{{end}}

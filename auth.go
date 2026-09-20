@@ -34,6 +34,11 @@ func generateCheckInToken() (string, error) {
 	return generateSessionToken()
 }
 
+// generateViewerToken creates the bearer token used by the read-only portal.
+func generateViewerToken() (string, error) {
+	return generateSessionToken()
+}
+
 // authMiddleware ensures the request has a valid session.
 func (app *App) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

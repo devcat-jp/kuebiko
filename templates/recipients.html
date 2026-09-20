@@ -3,6 +3,19 @@
 <h2>{{t .Lang "recipients"}}</h2><p>{{t .Lang "manage_recipients"}}</p>
 <a href="/recipients/new" class="btn btn-primary">{{t .Lang "add_recipient"}}</a>
 
+<div class="card">
+    <h3>{{t .Lang "test_email_title"}}</h3>
+    <p>{{t .Lang "test_email_description"}}</p>
+    <div class="form-actions">
+        <form method="post" action="/recipients/test-email?id=all" onsubmit="return confirm('{{t .Lang "test_email_all_confirm"}}');">
+            <button type="submit" class="btn btn-primary">{{t .Lang "send_test_to_all"}}</button>
+        </form>
+        <form method="post" action="/recipients/test-email/clear">
+            <button type="submit" class="btn">{{t .Lang "clear_test_links"}}</button>
+        </form>
+    </div>
+</div>
+
 <table class="data-table sortable-table" data-reorder-url="/recipients/reorder">
     <thead>
         <tr>
@@ -18,6 +31,9 @@
             <td>{{.Email}}</td>
             <td>
                 <a href="/recipients/edit?id={{.ID}}" class="btn btn-small">{{t $.Lang "edit"}}</a>
+                <form method="post" action="/recipients/test-email?id={{.ID}}" style="display:inline" onsubmit="return confirm('{{t $.Lang "test_email_confirm"}}');">
+                    <button type="submit" class="btn btn-small">{{t $.Lang "send_test_email"}}</button>
+                </form>
                 <form method="post" action="/recipients/delete?id={{.ID}}" style="display:inline" onsubmit="return confirm('{{t $.Lang "delete_confirm"}}');">
                     <button type="submit" class="btn btn-danger btn-small">{{t $.Lang "delete"}}</button>
                 </form>

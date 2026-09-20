@@ -88,6 +88,16 @@ CREATE TABLE IF NOT EXISTS documents (
 	updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	sort_order INTEGER NOT NULL DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS viewer_links (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	recipient_id INTEGER NOT NULL,
+	token_hash TEXT NOT NULL UNIQUE,
+	created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	expires_at INTEGER,
+	is_test INTEGER NOT NULL DEFAULT 0,
+	FOREIGN KEY (recipient_id) REFERENCES recipients(id) ON DELETE CASCADE
+);
 `
 	if _, err := db.conn.Exec(schema); err != nil {
 		return err
@@ -102,6 +112,26 @@ CREATE TABLE IF NOT EXISTS documents (
 	}
 	if !hasCategory {
 		if _, err := db.conn.Exec("ALTER TABLE secrets ADD COLUMN category TEXT NOT NULL DEFAULT 'financial'"); err != nil {
+			return err
+		}
+	}
+	// Older databases created viewer_links without the test-link columns.
+	// Test links expire automatically and are flagged so they can be told
+	// apart from the links issued by the real overdue trigger.
+	columns := map[string]string{
+		"expires_at": "ALTER TABLE viewer_links ADD COLUMN expires_at INTEGER",
+		"is_test":    "ALTER TABLE viewer_links ADD COLUMN is_test INTEGER NOT NULL DEFAULT 0",
+	}
+	for name, statement := range columns {
+		var found string
+		err := db.conn.QueryRow("SELECT name FROM pragma_table_info('viewer_links') WHERE name = ?", name).Scan(&found)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+		if found == name {
+			continue
+		}
+		if _, err := db.conn.Exec(statement); err != nil {
 			return err
 		}
 	}
@@ -131,6 +161,7 @@ func (db *DB) SetConfig(key, value string) error {
 const (
 	checkInTokenHashConfig       = "checkin_token_hash"
 	checkInTokenCiphertextConfig = "checkin_token_ciphertext"
+	viewerMessageConfig          = "viewer_message"
 )
 
 func hashCheckInToken(token string) string {
@@ -191,6 +222,75 @@ func (db *DB) ValidateCheckInToken(token string) (bool, error) {
 
 func (db *DB) ClearCheckInToken() error {
 	_, err := db.conn.Exec("DELETE FROM config WHERE key IN (?, ?)", checkInTokenHashConfig, checkInTokenCiphertextConfig)
+	return err
+}
+
+// Viewer message helpers. The message is encrypted at rest because it may
+// contain personal or otherwise sensitive information.
+func (db *DB) GetViewerMessage() (string, error) {
+	ciphertext, err := db.GetConfig(viewerMessageConfig)
+	if err != nil || ciphertext == "" {
+		return "", err
+	}
+	return decrypt(ciphertext, db.key)
+}
+
+func (db *DB) SetViewerMessage(message string) error {
+	ciphertext, err := encrypt(message, db.key)
+	if err != nil {
+		return err
+	}
+	return db.SetConfig(viewerMessageConfig, ciphertext)
+}
+
+// CreateViewerLink stores a non-expiring link issued by the overdue trigger.
+func (db *DB) CreateViewerLink(recipientID int64, token string) error {
+	return db.CreateViewerLinkWithExpiry(recipientID, token, time.Time{}, false)
+}
+
+// CreateViewerLinkWithExpiry stores a viewer link that optionally expires.
+// A zero expiry means the link stays valid until the next check-in. Test
+// links use isTest so the administrator can identify and revoke them.
+func (db *DB) CreateViewerLinkWithExpiry(recipientID int64, token string, expiresAt time.Time, isTest bool) error {
+	if strings.TrimSpace(token) == "" {
+		return fmt.Errorf("viewer token must not be empty")
+	}
+	// Expiry is stored as a Unix timestamp so SQLite can compare it directly.
+	var expires any
+	if !expiresAt.IsZero() {
+		expires = expiresAt.Unix()
+	}
+	_, err := db.conn.Exec(
+		"INSERT INTO viewer_links (recipient_id, token_hash, expires_at, is_test) VALUES (?, ?, ?, ?)",
+		recipientID, hashCheckInToken(token), expires, isTest)
+	return err
+}
+
+func (db *DB) ValidateViewerToken(token string) (bool, error) {
+	var found int
+	err := db.conn.QueryRow(
+		"SELECT 1 FROM viewer_links WHERE token_hash = ? AND (expires_at IS NULL OR expires_at > ?)",
+		hashCheckInToken(token), time.Now().Unix()).Scan(&found)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	return err == nil && found == 1, err
+}
+
+// DeleteExpiredViewerLinks removes test links whose validity has ended.
+func (db *DB) DeleteExpiredViewerLinks() error {
+	_, err := db.conn.Exec("DELETE FROM viewer_links WHERE expires_at IS NOT NULL AND expires_at <= ?", time.Now().Unix())
+	return err
+}
+
+// DeleteTestViewerLinks removes every link issued by the email test feature.
+func (db *DB) DeleteTestViewerLinks() error {
+	_, err := db.conn.Exec("DELETE FROM viewer_links WHERE is_test = 1")
+	return err
+}
+
+func (db *DB) ClearViewerLinks() error {
+	_, err := db.conn.Exec("DELETE FROM viewer_links")
 	return err
 }
 

@@ -1,0 +1,8 @@
+{{define "viewer_documents_title"}}{{t .Lang "memos"}}{{end}}
+{{define "viewer_documents_content"}}
+<h2>{{t .Lang "memos"}}</h2>
+<table class="data-table"><thead><tr><th>{{t .Lang "title"}}</th><th>{{t .Lang "updated_at"}}</th><th>{{t .Lang "view"}}</th></tr></thead><tbody>
+{{range .Documents}}<tr><td>{{.Title}}</td><td>{{.UpdatedAt.Format "2006-01-02 15:04"}}</td><td><a class="btn btn-small" href="/view/{{$.ViewerToken}}/documents/preview?id={{.ID}}">{{t $.Lang "preview"}}</a></td></tr>
+{{else}}<tr><td colspan="3">{{t .Lang "no_documents"}}</td></tr>{{end}}
+</tbody></table>
+{{end}}

@@ -26,16 +26,39 @@ go.work.sum
 
 # env file
 .env
+.env.*
+!.env.example
 
-# Encryption key
+# Built application binary (produced in the repository root)
+/kuebiko
+
+# Encryption keys and TLS material
 *.key
+*.pem
+*.p12
+*.crt
+
+# Local database files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
 
 # Logs
 *.log
 *.err
 dms.err
+nohup.out
+*.pid
 
 # Editor/IDE
 # .idea/
 .vscode/
+*.swp
+*~
+.DS_Store
+
+# Local data directory
+/data/
 data/

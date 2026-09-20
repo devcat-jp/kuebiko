@@ -117,26 +117,33 @@ type Document struct {
 
 // AppData is passed to templates.
 type AppData struct {
-	Lang          string
-	RequestPath   string
-	AppName       string
-	User          *User
-	Flash         string
-	FlashType     string
-	CheckInURL    string
-	SMTPSettings  *SMTPSettings
-	AllowedIPs    string
-	Recipients    []Recipient
-	Secrets       []Secret
-	Category      string
-	Documents     []Document
-	Secret        *Secret
-	SecretPayload *SecretPayload
-	Document      *Document
-	Recipient     *Recipient
-	Deadline      *time.Time
-	IsOverdue     bool
-	TriggerAt     *time.Time
-	Title         template.HTML
-	Content       template.HTML
+	Lang                string
+	RequestPath         string
+	AppName             string
+	User                *User
+	Flash               string
+	FlashType           string
+	CheckInURL          string
+	SMTPSettings        *SMTPSettings
+	AllowedIPs          string
+	EffectiveAllowedIPs string
+	AllowedIPsEnv       bool
+	ClientIP            string
+	Recipients          []Recipient
+	Secrets             []Secret
+	Category            string
+	Documents           []Document
+	Secret              *Secret
+	SecretPayload       *SecretPayload
+	Document            *Document
+	Recipient           *Recipient
+	Deadline            *time.Time
+	IsOverdue           bool
+	TriggerAt           *time.Time
+	ViewerMode          bool
+	ViewerToken         string
+	PublicURL           string
+	ViewerMessage       string
+	Title               template.HTML
+	Content             template.HTML
 }

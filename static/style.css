@@ -501,6 +501,19 @@ tr[draggable="true"] td {
     font-size: 0.9rem;
 }
 
+.current-settings {
+    margin-bottom: 20px;
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface, transparent);
+}
+
+.current-settings h4 {
+    margin: 0 0 8px;
+    font-size: 0.95rem;
+}
+
 .view-row {
     display: flex;
     align-items: baseline;

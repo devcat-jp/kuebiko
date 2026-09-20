@@ -1,0 +1,11 @@
+{{define "viewer_message_title"}}{{t .Lang "viewer_message"}}{{end}}
+{{define "viewer_message_content"}}
+<h2>{{t .Lang "viewer_message"}}</h2>
+<div class="card markdown-body">
+    {{if .ViewerMessage}}{{.ViewerMessage | md}}{{else}}<p>{{t .Lang "viewer_message_empty"}}</p>{{end}}
+</div>
+<p>{{t .Lang "viewer_message_intro"}}</p>
+<div class="form-actions">
+    <a class="btn btn-primary" href="/view/{{.ViewerToken}}/financial">{{t .Lang "viewer_browse_information"}}</a>
+</div>
+{{end}}
