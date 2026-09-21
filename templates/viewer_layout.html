@@ -19,10 +19,17 @@
             <a href="/view/{{.ViewerToken}}/insurance">{{t .Lang "insurance_info"}}</a>
             <a href="/view/{{.ViewerToken}}/subscriptions">{{t .Lang "subscriptions"}}</a>
             <a href="/view/{{.ViewerToken}}/documents">{{t .Lang "memos"}}</a>
-            <span class="lang-switcher">
-                <a href="{{languageURL "ja" .RequestPath}}">{{t .Lang "language_ja"}}</a>
-                <a href="{{languageURL "en" .RequestPath}}">{{t .Lang "language_en"}}</a>
-            </span>
+            <div class="lang-switcher">
+                <button class="lang-switcher-button" type="button" aria-haspopup="true" aria-expanded="false" aria-label="{{t .Lang "language_menu"}}">
+                    <span class="lang-switcher-globe" aria-hidden="true">🌐</span>
+                    <span class="lang-switcher-current">{{if eq .Lang "en"}}{{t .Lang "language_en"}}{{else}}{{t .Lang "language_ja"}}{{end}}</span>
+                    <span class="lang-switcher-caret" aria-hidden="true">▾</span>
+                </button>
+                <div class="lang-switcher-menu" role="menu">
+                    <a href="{{languageURL "ja" .RequestPath}}" role="menuitem"{{if eq .Lang "ja"}} aria-current="true" class="active"{{end}}>{{t .Lang "language_ja"}}</a>
+                    <a href="{{languageURL "en" .RequestPath}}" role="menuitem"{{if eq .Lang "en"}} aria-current="true" class="active"{{end}}>{{t .Lang "language_en"}}</a>
+                </div>
+            </div>
         </nav>
     </div>
 </header>
@@ -37,6 +44,37 @@ document.addEventListener('click', function (e) {
     if (input.type === 'password') { input.type = 'text'; btn.textContent = '\ud83d\ude48'; }
     else { input.type = 'password'; btn.textContent = '\ud83d\udc41'; }
 });
+
+(function () {
+    document.querySelectorAll('.lang-switcher').forEach(function (switcher) {
+        var button = switcher.querySelector('.lang-switcher-button');
+        var menu = switcher.querySelector('.lang-switcher-menu');
+        if (!button || !menu) return;
+
+        function close() {
+            switcher.classList.remove('open');
+            button.setAttribute('aria-expanded', 'false');
+        }
+
+        button.addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (switcher.classList.contains('open')) {
+                close();
+            } else {
+                switcher.classList.add('open');
+                button.setAttribute('aria-expanded', 'true');
+            }
+        });
+
+        document.addEventListener('click', function (e) {
+            if (!switcher.contains(e.target)) close();
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') { close(); button.focus(); }
+        });
+    });
+})();
 </script>
 </body>
 </html>

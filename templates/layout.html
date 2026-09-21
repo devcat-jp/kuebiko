@@ -27,7 +27,7 @@
                     <button type="submit" class="link-button">{{t .Lang "logout"}}</button>
                 </form>
                 <div class="lang-switcher">
-                    <button class="lang-switcher-button" type="button" aria-haspopup="true" aria-expanded="false">
+                    <button class="lang-switcher-button" type="button" aria-haspopup="true" aria-expanded="false" aria-label="{{t .Lang "language_menu"}}">
                         <span class="lang-switcher-globe" aria-hidden="true">🌐</span>
                         <span class="lang-switcher-current">{{if eq .Lang "en"}}{{t .Lang "language_en"}}{{else}}{{t .Lang "language_ja"}}{{end}}</span>
                         <span class="lang-switcher-caret" aria-hidden="true">▾</span>
@@ -41,7 +41,7 @@
             {{else}}
             <nav>
                 <div class="lang-switcher">
-                    <button class="lang-switcher-button" type="button" aria-haspopup="true" aria-expanded="false">
+                    <button class="lang-switcher-button" type="button" aria-haspopup="true" aria-expanded="false" aria-label="{{t .Lang "language_menu"}}">
                         <span class="lang-switcher-globe" aria-hidden="true">🌐</span>
                         <span class="lang-switcher-current">{{if eq .Lang "en"}}{{t .Lang "language_en"}}{{else}}{{t .Lang "language_ja"}}{{end}}</span>
                         <span class="lang-switcher-caret" aria-hidden="true">▾</span>
