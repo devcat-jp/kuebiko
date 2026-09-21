@@ -186,4 +186,7 @@
   ,"password_changed_relogin":"Password changed. Please log in again with your new password."
   ,"email_invalid":"The email address format is invalid."
   ,"from_address_invalid":"The sender address format is invalid."
+  ,"move_up":"Move up"
+  ,"move_down":"Move down"
+  ,"language_menu":"Select language"
 }

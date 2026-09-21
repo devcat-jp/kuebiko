@@ -142,9 +142,48 @@
                         }
                     });
                 });
+
+                // HTML5 drag & drop never fires on touch devices, so the move
+                // buttons provide reordering there and via the keyboard.
+                tbody.addEventListener('click', function (e) {
+                    var button = e.target.closest('[data-move]');
+                    if (!button || button.disabled) return;
+                    var row = button.closest('tr[draggable="true"]');
+                    if (!row) return;
+                    var direction = button.getAttribute('data-move');
+                    if (direction === 'up') {
+                        var prev = row.previousElementSibling;
+                        if (!prev || !prev.matches('tr[draggable="true"]')) return;
+                        tbody.insertBefore(row, prev);
+                    } else {
+                        var next = row.nextElementSibling;
+                        if (!next || !next.matches('tr[draggable="true"]')) return;
+                        tbody.insertBefore(next, row);
+                    }
+                    saveOrder(table);
+                    var sameButton = row.querySelector('[data-move="' + direction + '"]');
+                    if (sameButton) sameButton.focus();
+                });
+
+                refreshMoveButtons(table);
+            }
+
+            function refreshMoveButtons(table) {
+                var tbody = table.querySelector('tbody');
+                if (!tbody) return;
+                var rows = Array.prototype.filter.call(tbody.children, function (row) {
+                    return row.matches('tr[draggable="true"]');
+                });
+                rows.forEach(function (row, index) {
+                    var up = row.querySelector('[data-move="up"]');
+                    var down = row.querySelector('[data-move="down"]');
+                    if (up) up.disabled = index === 0;
+                    if (down) down.disabled = index === rows.length - 1;
+                });
             }
 
             function saveOrder(table) {
+                refreshMoveButtons(table);
                 var url = table.getAttribute('data-reorder-url');
                 if (!url) return;
                 var rows = table.querySelectorAll('tbody tr[draggable="true"]');

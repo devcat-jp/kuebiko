@@ -148,5 +148,8 @@
   "too_many_attempts": "ログイン試行が多すぎます。しばらく待ってからやり直してください。",
   "password_changed_relogin": "パスワードを変更しました。新しいパスワードで再度ログインしてください。",
   "email_invalid": "メールアドレスの形式が正しくありません。",
-  "from_address_invalid": "送信元アドレスの形式が正しくありません。"
+  "from_address_invalid": "送信元アドレスの形式が正しくありません。",
+  "move_up": "上へ移動",
+  "move_down": "下へ移動",
+  "language_menu": "言語を選択"
 }
