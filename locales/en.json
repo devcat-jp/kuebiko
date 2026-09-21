@@ -184,4 +184,6 @@
   ,"password_too_short":"Password must be at least 8 characters long."
   ,"too_many_attempts":"Too many login attempts. Please wait and try again later."
   ,"password_changed_relogin":"Password changed. Please log in again with your new password."
+  ,"email_invalid":"The email address format is invalid."
+  ,"from_address_invalid":"The sender address format is invalid."
 }

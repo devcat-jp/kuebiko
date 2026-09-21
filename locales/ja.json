@@ -146,5 +146,7 @@
   "test_email_clear_failed": "テスト用URLの失効に失敗しました。",
   "password_too_short": "パスワードは8文字以上で設定してください。",
   "too_many_attempts": "ログイン試行が多すぎます。しばらく待ってからやり直してください。",
-  "password_changed_relogin": "パスワードを変更しました。新しいパスワードで再度ログインしてください。"
+  "password_changed_relogin": "パスワードを変更しました。新しいパスワードで再度ログインしてください。",
+  "email_invalid": "メールアドレスの形式が正しくありません。",
+  "from_address_invalid": "送信元アドレスの形式が正しくありません。"
 }

@@ -301,3 +301,56 @@ func TestDeleteViewerLinksUpToKeepsLatest(t *testing.T) {
 		t.Fatalf("latest token was invalidated: ok=%v err=%v", ok, err)
 	}
 }
+
+func TestValidEmail(t *testing.T) {
+	valid := []string{"a@example.com", "first.last+tag@sub.example.co.jp"}
+	invalid := []string{"", "plain", "a@", "@example.com", "Name <a@example.com>", "a b@example.com", "a@example.com, b@example.com"}
+	for _, s := range valid {
+		if !validEmail(s) {
+			t.Errorf("validEmail(%q) = false, want true", s)
+		}
+	}
+	for _, s := range invalid {
+		if validEmail(s) {
+			t.Errorf("validEmail(%q) = true, want false", s)
+		}
+	}
+}
+
+func TestCheckInURLEPrefersPublicURL(t *testing.T) {
+	t.Setenv("APP_PUBLIC_URL", "https://public.example/")
+	r := httptest.NewRequest(http.MethodGet, "http://evil.example/settings", nil)
+	if got := checkInURL(r, "tok"); got != "https://public.example/checkin/tok" {
+		t.Fatalf("checkInURL = %q, want APP_PUBLIC_URL based URL", got)
+	}
+	t.Setenv("APP_PUBLIC_URL", "")
+	if got := checkInURL(r, "tok"); got != "http://evil.example/checkin/tok" {
+		t.Fatalf("checkInURL = %q, want request-host fallback", got)
+	}
+	if got := checkInURL(r, ""); got != "" {
+		t.Fatalf("checkInURL with empty token = %q, want empty", got)
+	}
+}
+
+func TestFlashVisibleInSameResponse(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/", nil)
+	setFlash(w, "email_invalid", "error")
+	msg, typ := getFlash(w, r)
+	if msg != "email_invalid" || typ != "error" {
+		t.Fatalf("getFlash = (%q, %q), want (email_invalid, error)", msg, typ)
+	}
+	// The pending cookie must be cleared so the message is not repeated.
+	if got := w.Header().Get(flashHeaderName); got != "" {
+		t.Fatalf("flash header was not cleared: %q", got)
+	}
+	var deletions int
+	for _, c := range w.Result().Cookies() {
+		if c.Name == flashCookieName && c.MaxAge < 0 {
+			deletions++
+		}
+	}
+	if deletions != 1 {
+		t.Fatalf("flash cookie deletion count = %d, want 1", deletions)
+	}
+}

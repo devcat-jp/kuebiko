@@ -560,11 +560,9 @@ func checkInURL(r *http.Request, token string) string {
 	if token == "" {
 		return ""
 	}
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	return scheme + "://" + r.Host + "/checkin/" + token
+	// Reuse publicBaseURL so an explicit APP_PUBLIC_URL wins over the request
+	// Host header (avoids Host-header injection in the displayed URL).
+	return publicBaseURL(r) + "/checkin/" + token
 }
 
 // viewerHandler serves the token-authenticated read-only portal. A viewer
@@ -818,6 +816,11 @@ func (app *App) settingsHandler(w http.ResponseWriter, r *http.Request) {
 			app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: newAllowedIPs, AllowedIPsEnv: allowedIPsEnv != "", CheckInURL: checkInURLValue})
 			return
 		}
+		if !validEmail(from) {
+			setFlash(w, "from_address_invalid", "error")
+			app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: newAllowedIPs, AllowedIPsEnv: allowedIPsEnv != "", CheckInURL: checkInURLValue})
+			return
+		}
 		if newAllowedIPs != "" {
 			if _, err := parseAllowedNetworks(newAllowedIPs); err != nil {
 				setFlash(w, "allowed_ip_invalid|"+err.Error(), "error")
@@ -870,6 +873,11 @@ func (app *App) recipientNewHandler(w http.ResponseWriter, r *http.Request) {
 		app.render(w, r, "recipient_form.html", nil)
 		return
 	}
+	if !validEmail(email) {
+		setFlash(w, "email_invalid", "error")
+		app.render(w, r, "recipient_form.html", nil)
+		return
+	}
 	if err := app.db.CreateRecipient(email, name); err != nil {
 		setFlash(w, "add_failed", "error")
 		app.render(w, r, "recipient_form.html", nil)
@@ -894,6 +902,11 @@ func (app *App) recipientEditHandler(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.FormValue("name"))
 	if email == "" {
 		setFlash(w, "email_required", "error")
+		app.render(w, r, "recipient_form.html", &AppData{Recipient: recipient})
+		return
+	}
+	if !validEmail(email) {
+		setFlash(w, "email_invalid", "error")
 		app.render(w, r, "recipient_form.html", &AppData{Recipient: recipient})
 		return
 	}

@@ -316,6 +316,8 @@ CGO は不要（modernc.org/sqlite を使用）。
 - POST のリクエストボディは 1 MiB に制限（超過は 413）
 - HTTP サーバーに `ReadHeaderTimeout` / `ReadTimeout` / `WriteTimeout` / `IdleTimeout` / `MaxHeaderBytes` を設定
 - リダイレクト先は `safeReturnPath()` で検証し、外部 URL や `//`・`/\` 始まりを拒否する
+- 表示する URL（生存確認 URL 等）は `APP_PUBLIC_URL` を優先し、未設定時のみリクエストの `Host` ヘッダーを使う
+- 受信者・送信元メールアドレスは保存時に `net/mail` で形式検証し、表示名付きの形式は拒否する
 - テンプレートは html/template を使用し XSS を抑制
 - Markdown レンダリングでは生の HTML を破棄し（`html.SkipHTML`）、`javascript:` / `data:` などの危険なリンクを無効化する
 - SMTP パスワードは DB に平文保存

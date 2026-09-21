@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"net/http"
+	"net/mail"
 	"strings"
 	"sync"
 	"time"
@@ -209,6 +210,17 @@ func resetLoginFailures(key string) {
 	loginLimiter.mu.Lock()
 	defer loginLimiter.mu.Unlock()
 	delete(loginLimiter.m, key)
+}
+
+// validEmail reports whether s is a syntactically valid, bare email address.
+// Display-name forms like `Name <a@b>` are rejected so the stored value can be
+// used directly as an SMTP envelope recipient.
+func validEmail(s string) bool {
+	addr, err := mail.ParseAddress(s)
+	if err != nil {
+		return false
+	}
+	return addr.Address == s
 }
 
 // validatePassword enforces a minimum password length.
