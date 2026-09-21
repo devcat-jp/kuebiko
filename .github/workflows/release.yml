@@ -10,51 +10,6 @@ permissions:
   packages: write
 
 jobs:
-  build-binaries:
-    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-          - goos: linux
-            goarch: arm64
-          - goos: windows
-            goarch: amd64
-          - goos: darwin
-            goarch: amd64
-          - goos: darwin
-            goarch: arm64
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - name: Build
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-        shell: bash
-        run: |
-          ext=""
-          [ "$GOOS" = "windows" ] && ext=".exe"
-          mkdir -p dist
-          go build -trimpath -ldflags="-s -w" -o "dist/kuebiko-${GOOS}-${GOARCH}${ext}" .
-          cp README.md LICENSE dist/
-          (cd dist && tar czf "../kuebiko-${{ github.ref_name }}-${GOOS}-${GOARCH}.tar.gz" .)
-          [ -n "$ext" ] && (cd dist && zip -q "../kuebiko-${{ github.ref_name }}-${GOOS}-${GOARCH}.zip" .) || true
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: kuebiko-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: |
-            kuebiko-${{ github.ref_name }}-*.tar.gz
-            kuebiko-${{ github.ref_name }}-*.zip
-
   build-docker:
     name: Build and push Docker image
     runs-on: ubuntu-latest
@@ -81,19 +36,38 @@ jobs:
             ghcr.io/${{ github.repository }}:latest
 
   release:
-    name: Create GitHub Release
-    needs: [build-binaries, build-docker]
+    name: Build binaries and create GitHub Release
+    needs: [build-docker]
     runs-on: ubuntu-latest
     steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
         with:
-          merge-multiple: true
-          path: dist
+          go-version-file: go.mod
+
+      - name: Build binaries for all platforms
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -eu
+          mkdir -p dist
+          for plat in linux-amd64 linux-arm64 windows-amd64 darwin-amd64 darwin-arm64; do
+            goos="${plat%%-*}"
+            goarch="${plat##*-}"
+            ext=""
+            [ "$goos" = "windows" ] && ext=".exe"
+            go build -trimpath -ldflags="-s -w" -o "dist/kuebiko-${goos}-${goarch}${ext}" .
+            mkdir -p "pkg/${plat}"
+            cp "dist/kuebiko-${goos}-${goarch}${ext}" README.md LICENSE "pkg/${plat}/"
+            (cd "pkg/${plat}" && zip -q "../../kuebiko-${TAG}-${plat}.zip" .)
+            rm -rf "pkg/${plat}"
+          done
 
       - name: Generate checksums
-        working-directory: dist
-        run: sha256sum * > checksums.txt
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
 
       - name: Create release
         uses: softprops/action-gh-release@v2
