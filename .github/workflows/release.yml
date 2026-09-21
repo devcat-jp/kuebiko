@@ -60,7 +60,7 @@ jobs:
             go build -trimpath -ldflags="-s -w" -o "dist/kuebiko-${goos}-${goarch}${ext}" .
             mkdir -p "pkg/${plat}"
             cp "dist/kuebiko-${goos}-${goarch}${ext}" README.md LICENSE "pkg/${plat}/"
-            (cd "pkg/${plat}" && zip -q "../../kuebiko-${TAG}-${plat}.zip" .)
+            (cd "pkg/${plat}" && zip -qr "../../kuebiko-${TAG}-${plat}.zip" .)
             rm -rf "pkg/${plat}"
           done
 
