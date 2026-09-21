@@ -18,6 +18,7 @@
     </div>
 </div>
 
+<div class="table-wrap">
 <table class="data-table sortable-table" data-reorder-url="/recipients/reorder">
     <thead>
         <tr>
@@ -29,15 +30,19 @@
         {{range .Recipients}}
         <tr draggable="true" data-id="{{.ID}}">
             <td class="drag-handle">⋮⋮</td>
-            <td>{{.Name}}</td>
-            <td>{{.Email}}</td>
-            <td>
+            <td class="cell-title">{{.Name}}</td>
+            <td data-label="{{t $.Lang "email_address"}}">{{.Email}}</td>
+            <td class="cell-actions">
+                <span class="move-controls">
+                    <button type="button" class="btn btn-small move-btn" data-move="up" aria-label="{{t $.Lang "move_up"}}">▲</button>
+                    <button type="button" class="btn btn-small move-btn" data-move="down" aria-label="{{t $.Lang "move_down"}}">▼</button>
+                </span>
                 <a href="/recipients/edit?id={{.ID}}" class="btn btn-small">{{t $.Lang "edit"}}</a>
-                <form method="post" action="/recipients/test-email?id={{.ID}}" style="display:inline" data-confirm="{{t $.Lang "test_email_confirm"}}">
+                <form method="post" action="/recipients/test-email?id={{.ID}}" data-confirm="{{t $.Lang "test_email_confirm"}}">
                     <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
                     <button type="submit" class="btn btn-small">{{t $.Lang "send_test_email"}}</button>
                 </form>
-                <form method="post" action="/recipients/delete?id={{.ID}}" style="display:inline" data-confirm="{{t $.Lang "delete_confirm"}}">
+                <form method="post" action="/recipients/delete?id={{.ID}}" data-confirm="{{t $.Lang "delete_confirm"}}">
                     <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
                     <button type="submit" class="btn btn-danger btn-small">{{t $.Lang "delete"}}</button>
                 </form>
@@ -50,4 +55,5 @@
         {{end}}
     </tbody>
 </table>
+</div>
 {{end}}

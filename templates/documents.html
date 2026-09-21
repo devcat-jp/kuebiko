@@ -3,6 +3,7 @@
 <h2>{{t .Lang "memos"}}</h2>
 <a href="/documents/new" class="btn btn-primary">{{t .Lang "add_memo"}}</a>
 
+<div class="table-wrap">
 <table class="data-table sortable-table" data-reorder-url="/documents/reorder">
     <thead>
         <tr>
@@ -14,12 +15,16 @@
         {{range .Documents}}
         <tr draggable="true" data-id="{{.ID}}">
             <td class="drag-handle">⋮⋮</td>
-            <td>{{.Title}}</td>
-            <td>{{.UpdatedAt.Format "2006-01-02 15:04"}}</td>
-            <td>
+            <td class="cell-title">{{.Title}}</td>
+            <td data-label="{{t $.Lang "updated_at"}}">{{.UpdatedAt.Format "2006-01-02 15:04"}}</td>
+            <td class="cell-actions">
+                <span class="move-controls">
+                    <button type="button" class="btn btn-small move-btn" data-move="up" aria-label="{{t $.Lang "move_up"}}">▲</button>
+                    <button type="button" class="btn btn-small move-btn" data-move="down" aria-label="{{t $.Lang "move_down"}}">▼</button>
+                </span>
                 <a href="/documents/preview?id={{.ID}}" class="btn btn-small">{{t $.Lang "preview"}}</a>
                 <a href="/documents/edit?id={{.ID}}" class="btn btn-small">{{t $.Lang "edit"}}</a>
-                <form method="post" action="/documents/delete?id={{.ID}}" style="display:inline" data-confirm="{{t $.Lang "delete_confirm"}}">
+                <form method="post" action="/documents/delete?id={{.ID}}" data-confirm="{{t $.Lang "delete_confirm"}}">
                     <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
                     <button type="submit" class="btn btn-danger btn-small">{{t $.Lang "delete"}}</button>
                 </form>
@@ -32,4 +37,5 @@
         {{end}}
     </tbody>
 </table>
+</div>
 {{end}}

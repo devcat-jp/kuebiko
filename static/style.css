@@ -1,4 +1,5 @@
 :root {
+    color-scheme: light;
     --bg: #f5f7fa;
     --card: #ffffff;
     --text: #333333;
@@ -359,6 +360,39 @@ textarea:focus {
     box-shadow: var(--shadow);
 }
 
+/* Lets wide tables scroll horizontally on narrow screens instead of being
+   clipped by the table's own rounded corners. */
+.table-wrap {
+    margin-top: 16px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    background: var(--card);
+}
+
+.table-wrap .data-table {
+    margin-top: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+/* Reorder buttons for touch devices, where HTML5 drag & drop does not fire.
+   They stay hidden on pointer devices that can drag rows directly. */
+.move-controls {
+    display: none;
+    gap: 6px;
+}
+
+.move-btn {
+    min-width: 40px;
+}
+
+.move-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
 .data-table th,
 .data-table td {
     padding: 12px 16px;
@@ -615,4 +649,248 @@ tr[draggable="true"] td {
 .secret-title-link:hover {
     color: var(--primary);
     text-decoration: underline;
+}
+
+/* ---------------------------------------------------------------
+   Reorder controls (touch devices)
+   --------------------------------------------------------------- */
+@media (pointer: coarse), (max-width: 640px) {
+    .move-controls {
+        display: inline-flex;
+    }
+}
+
+/* ---------------------------------------------------------------
+   Mobile layout
+   --------------------------------------------------------------- */
+@media (max-width: 640px) {
+    .container {
+        padding: 0 12px;
+    }
+
+    header {
+        padding: 8px 0;
+        margin-bottom: 16px;
+    }
+
+    header h1 {
+        font-size: 1.15rem;
+        flex: 0 0 auto;
+    }
+
+    /* Keep the navigation on one row and let it scroll sideways instead of
+       growing into several stacked lines that fill the screen. */
+    header .container {
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 10px;
+    }
+
+    nav {
+        flex-wrap: nowrap;
+        min-width: 0;
+        overflow-x: auto;
+        gap: 14px;
+        white-space: nowrap;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    nav::-webkit-scrollbar {
+        display: none;
+    }
+
+    nav a,
+    nav .link-button {
+        padding: 6px 0;
+    }
+
+    .lang-switcher {
+        flex: 0 0 auto;
+    }
+
+    main {
+        padding-bottom: 32px;
+    }
+
+    .card {
+        padding: 16px;
+    }
+
+    /* Comfortable tap targets (WCAG 2.5.5). */
+    .btn,
+    .btn-small,
+    .btn-icon {
+        min-height: 44px;
+        min-width: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .lang-switcher-button {
+        min-height: 44px;
+    }
+
+    .lang-switcher-menu a {
+        padding: 12px 16px;
+    }
+
+    /* Stack labels above their inputs. */
+    .form-row {
+        flex-wrap: wrap;
+    }
+
+    .form-row label {
+        flex: 1 1 100%;
+        margin-bottom: 4px;
+    }
+
+    .form-row input[type="text"],
+    .form-row input[type="password"],
+    .form-row input[type="email"],
+    .form-row input[type="number"],
+    .form-row input[type="url"],
+    .form-row textarea {
+        flex: 1 1 100%;
+    }
+
+    /* Additional fields: the value gets its own full-width line. */
+    .extra-field-row {
+        flex-wrap: wrap;
+    }
+
+    .extra-field-row input[name="field_name"] {
+        flex: 1 1 45%;
+    }
+
+    .extra-field-row input[name="field_value"] {
+        flex: 1 1 100%;
+        order: 3;
+    }
+
+    /* Detail rows: label above value. */
+    .view-row {
+        flex-wrap: wrap;
+    }
+
+    .view-label {
+        flex: 1 1 100%;
+        margin-bottom: 2px;
+    }
+
+    .view-value,
+    .secret-input-wrap {
+        flex: 1 1 100%;
+    }
+
+    .password-field {
+        flex-wrap: wrap;
+    }
+
+    .password-field input[type="password"],
+    .password-field input[type="text"] {
+        flex: 1 1 100%;
+    }
+
+    .password-field .btn-toggle {
+        align-self: flex-end;
+    }
+
+    .form-actions {
+        flex-wrap: wrap;
+    }
+
+    /* Tables become stacked cards with inline labels. */
+    .table-wrap {
+        overflow-x: visible;
+        box-shadow: none;
+        background: transparent;
+    }
+
+    .data-table {
+        background: transparent;
+        box-shadow: none;
+        border-radius: 0;
+    }
+
+    .data-table thead {
+        display: none;
+    }
+
+    .data-table,
+    .data-table tbody,
+    .data-table tr,
+    .data-table td {
+        display: block;
+        width: 100%;
+    }
+
+    .data-table tr {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        margin-bottom: 10px;
+        padding: 10px 12px;
+    }
+
+    .data-table th,
+    .data-table td {
+        border-bottom: none;
+        padding: 4px 0;
+        white-space: normal;
+    }
+
+    .data-table td[data-label]::before {
+        content: attr(data-label) ": ";
+        color: var(--muted);
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-right: 4px;
+    }
+
+    html[lang="ja"] .data-table td[data-label]::before {
+        content: attr(data-label) "：";
+    }
+
+    .data-table td.cell-title {
+        font-size: 1.05rem;
+        font-weight: 600;
+        padding-bottom: 6px;
+    }
+
+    .data-table td.cell-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        white-space: normal;
+        margin-top: 8px;
+        padding-top: 10px;
+        border-top: 1px solid var(--border);
+    }
+
+    /* Let buttons inside forms line up as direct flex children. */
+    .data-table td.cell-actions form {
+        display: contents;
+    }
+
+    .drag-handle,
+    .drag-handle-header {
+        display: none;
+    }
+}
+
+/* ---------------------------------------------------------------
+   Accessibility
+   --------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
 }
