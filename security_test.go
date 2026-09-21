@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func newTestDB(t *testing.T) *DB {
@@ -130,5 +131,173 @@ func TestRenderMarkdownSanitizesScriptAndSchemes(t *testing.T) {
 	}
 	if !strings.Contains(out, "https://ok.example") {
 		t.Fatalf("safe link was dropped: %s", out)
+	}
+}
+
+func TestSafeReturnPath(t *testing.T) {
+	cases := map[string]string{
+		"/settings":        "/settings",
+		"/a?b=1":           "/a?b=1",
+		"":                 "/",
+		"//evil.example":   "/",
+		"/\\evil.example":  "/",
+		"https://evil/":    "/",
+		"javascript:alert": "/",
+		"/a\nb":            "/",
+		"/a\\b":            "/",
+	}
+	for in, want := range cases {
+		if got := safeReturnPath(in); got != want {
+			t.Errorf("safeReturnPath(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestValidatePassword(t *testing.T) {
+	if validatePassword("short") {
+		t.Fatal("short password accepted")
+	}
+	if !validatePassword("longenough") {
+		t.Fatal("valid password rejected")
+	}
+}
+
+func TestCSRFMiddleware(t *testing.T) {
+	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+	h := csrfMiddleware(ok)
+
+	// GET is always allowed.
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET code = %d, want 200", rec.Code)
+	}
+
+	// POST without a token is rejected.
+	rec = httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("a=1"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("POST without token code = %d, want 403", rec.Code)
+	}
+
+	// POST with a matching cookie and form field is accepted.
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/", strings.NewReader("csrf_token=secret-token"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "secret-token"})
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST with valid token code = %d, want 200", rec.Code)
+	}
+
+	// POST with a matching cookie and header is accepted (fetch requests).
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/", strings.NewReader("id=1"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set(csrfHeaderName, "secret-token")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "secret-token"})
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST with valid header code = %d, want 200", rec.Code)
+	}
+
+	// A mismatching token is rejected.
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/", strings.NewReader("csrf_token=wrong"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "secret-token"})
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("POST with wrong token code = %d, want 403", rec.Code)
+	}
+}
+
+func TestSecurityHeaders(t *testing.T) {
+	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+	h := securityHeaders(ok)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
+	csp := rec.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "script-src 'self' 'nonce-") || !strings.Contains(csp, "frame-ancestors 'none'") {
+		t.Fatalf("unexpected CSP: %q", csp)
+	}
+	if rec.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatal("missing nosniff header")
+	}
+	if rec.Header().Get("X-Frame-Options") != "DENY" {
+		t.Fatal("missing frame denial header")
+	}
+	if rec.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("authenticated pages must not be cached")
+	}
+	if rec.Header().Get("Strict-Transport-Security") != "" {
+		t.Fatal("HSTS must not be sent over plain HTTP")
+	}
+
+	old := cookieSecure
+	cookieSecure = true
+	defer func() { cookieSecure = old }()
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
+	if rec.Header().Get("Strict-Transport-Security") == "" {
+		t.Fatal("HSTS missing when TLS is enabled")
+	}
+}
+
+func TestLoginLimiterLocksOut(t *testing.T) {
+	key := "test-" + t.Name()
+	resetLoginFailures(key)
+	for i := 0; i < loginMaxFailures; i++ {
+		if loginBlocked(key) && i < loginMaxFailures-1 {
+			t.Fatalf("locked out early at attempt %d", i)
+		}
+		registerLoginFailure(key)
+	}
+	if !loginBlocked(key) {
+		t.Fatal("expected lockout after repeated failures")
+	}
+	resetLoginFailures(key)
+	if loginBlocked(key) {
+		t.Fatal("reset did not clear lockout")
+	}
+}
+
+func TestDeleteViewerLinksUpToKeepsLatest(t *testing.T) {
+	db := newTestDB(t)
+	res, err := db.conn.Exec("INSERT INTO recipients (email, name, sort_order) VALUES ('a@example.com', 'a', 0)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rid, _ := res.LastInsertId()
+	if err := db.CreateViewerLink(rid, "old-token"); err != nil {
+		t.Fatal(err)
+	}
+	watermark, err := db.MaxViewerLinkID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateViewerLink(rid, "new-token"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateViewerLinkWithExpiry(rid, "test-token", time.Now().Add(time.Hour), true); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.DeleteViewerLinksUpTo(watermark); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := db.conn.QueryRow("SELECT COUNT(*) FROM viewer_links").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Fatalf("viewer_links = %d, want 2 (latest + test link)", count)
+	}
+	if ok, err := db.ValidateViewerToken("old-token"); err != nil || ok {
+		t.Fatalf("pruned token still valid: ok=%v err=%v", ok, err)
+	}
+	if ok, err := db.ValidateViewerToken("new-token"); err != nil || !ok {
+		t.Fatalf("latest token was invalidated: ok=%v err=%v", ok, err)
 	}
 }

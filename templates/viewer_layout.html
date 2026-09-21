@@ -27,12 +27,15 @@
 </header>
 <main class="container">{{.Content}}</main>
 <footer class="container"><p>{{t .Lang "viewer_read_only"}}</p></footer>
-<script>
-function toggleReveal(btn) {
-    const input = btn.parentElement.querySelector('.secret-input');
-    if (input.type === 'password') { input.type = 'text'; btn.textContent = '🙈'; }
-    else { input.type = 'password'; btn.textContent = '👁'; }
-}
+<script nonce="{{.CSPNonce}}">
+document.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-reveal]');
+    if (!btn) return;
+    var input = btn.parentElement.querySelector('.secret-input');
+    if (!input) return;
+    if (input.type === 'password') { input.type = 'text'; btn.textContent = '\ud83d\ude48'; }
+    else { input.type = 'password'; btn.textContent = '\ud83d\udc41'; }
+});
 </script>
 </body>
 </html>

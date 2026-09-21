@@ -143,5 +143,8 @@
   "test_email_smtp_required": "SMTP設定が未登録のため、テストメールを送信できません。",
   "test_email_no_recipients": "受信者が登録されていないため、テストメールを送信できません。",
   "test_email_cleared": "テスト用URLを失効させました。",
-  "test_email_clear_failed": "テスト用URLの失効に失敗しました。"
+  "test_email_clear_failed": "テスト用URLの失効に失敗しました。",
+  "password_too_short": "パスワードは8文字以上で設定してください。",
+  "too_many_attempts": "ログイン試行が多すぎます。しばらく待ってからやり直してください。",
+  "password_changed_relogin": "パスワードを変更しました。新しいパスワードで再度ログインしてください。"
 }

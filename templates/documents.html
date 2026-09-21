@@ -19,7 +19,8 @@
             <td>
                 <a href="/documents/preview?id={{.ID}}" class="btn btn-small">{{t $.Lang "preview"}}</a>
                 <a href="/documents/edit?id={{.ID}}" class="btn btn-small">{{t $.Lang "edit"}}</a>
-                <form method="post" action="/documents/delete?id={{.ID}}" style="display:inline" onsubmit="return confirm('{{t $.Lang "delete_confirm"}}');">
+                <form method="post" action="/documents/delete?id={{.ID}}" style="display:inline" data-confirm="{{t $.Lang "delete_confirm"}}">
+                    <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
                     <button type="submit" class="btn btn-danger btn-small">{{t $.Lang "delete"}}</button>
                 </form>
             </td>

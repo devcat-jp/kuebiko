@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"net/http"
 	"time"
@@ -39,6 +40,40 @@ func generateViewerToken() (string, error) {
 	return generateSessionToken()
 }
 
+// constantTimeEqual compares two secrets without leaking their contents
+// through timing.
+func constantTimeEqual(a, b string) bool {
+	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
+}
+
+// setSessionCookie issues the session cookie with hardened attributes.
+func setSessionCookie(w http.ResponseWriter, token string, expires time.Time) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    token,
+		Expires:  expires,
+		MaxAge:   int(time.Until(expires).Seconds()),
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   cookieSecure,
+		Path:     "/",
+	})
+}
+
+// clearSessionCookie removes the session cookie from the browser.
+func clearSessionCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    "",
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   cookieSecure,
+		Path:     "/",
+	})
+}
+
 // authMiddleware ensures the request has a valid session.
 func (app *App) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +83,7 @@ func (app *App) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		user, err := app.db.GetUser()
-		if err != nil || user == nil || user.SessionToken == nil || *user.SessionToken != cookie.Value {
+		if err != nil || user == nil || user.SessionToken == nil || !constantTimeEqual(*user.SessionToken, cookie.Value) {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
@@ -68,7 +103,7 @@ func (app *App) currentUser(r *http.Request) (*User, error) {
 		return nil, nil
 	}
 	user, err := app.db.GetUser()
-	if err != nil || user == nil || user.SessionToken == nil || *user.SessionToken != cookie.Value {
+	if err != nil || user == nil || user.SessionToken == nil || !constantTimeEqual(*user.SessionToken, cookie.Value) {
 		return nil, nil
 	}
 	if user.SessionExpiresAt != nil && user.SessionExpiresAt.Before(time.Now()) {

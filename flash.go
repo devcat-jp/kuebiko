@@ -20,21 +20,21 @@ func decodeCookieValue(s string) string {
 	return string(b)
 }
 
+func flashCookie(name, value string, maxAge int) *http.Cookie {
+	return &http.Cookie{
+		Name:     name,
+		Value:    value,
+		Path:     "/",
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   cookieSecure,
+	}
+}
+
 func setFlash(w http.ResponseWriter, message, typ string) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     flashCookieName,
-		Value:    encodeCookieValue(message),
-		Path:     "/",
-		MaxAge:   60,
-		HttpOnly: true,
-	})
-	http.SetCookie(w, &http.Cookie{
-		Name:     flashTypeCookieName,
-		Value:    encodeCookieValue(typ),
-		Path:     "/",
-		MaxAge:   60,
-		HttpOnly: true,
-	})
+	http.SetCookie(w, flashCookie(flashCookieName, encodeCookieValue(message), 60))
+	http.SetCookie(w, flashCookie(flashTypeCookieName, encodeCookieValue(typ), 60))
 }
 
 func getFlash(w http.ResponseWriter, r *http.Request) (string, string) {
@@ -42,23 +42,11 @@ func getFlash(w http.ResponseWriter, r *http.Request) (string, string) {
 	typ := ""
 	if c, err := r.Cookie(flashCookieName); err == nil {
 		msg = decodeCookieValue(c.Value)
-		http.SetCookie(w, &http.Cookie{
-			Name:     flashCookieName,
-			Value:    "",
-			Path:     "/",
-			MaxAge:   -1,
-			HttpOnly: true,
-		})
+		http.SetCookie(w, flashCookie(flashCookieName, "", -1))
 	}
 	if c, err := r.Cookie(flashTypeCookieName); err == nil {
 		typ = decodeCookieValue(c.Value)
-		http.SetCookie(w, &http.Cookie{
-			Name:     flashTypeCookieName,
-			Value:    "",
-			Path:     "/",
-			MaxAge:   -1,
-			HttpOnly: true,
-		})
+		http.SetCookie(w, flashCookie(flashTypeCookieName, "", -1))
 	}
 	return msg, typ
 }

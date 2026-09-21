@@ -181,4 +181,7 @@
   ,"test_email_no_recipients":"No recipients are registered, so a test email cannot be sent."
   ,"test_email_cleared":"The test URLs have been revoked."
   ,"test_email_clear_failed":"Failed to revoke the test URLs."
+  ,"password_too_short":"Password must be at least 8 characters long."
+  ,"too_many_attempts":"Too many login attempts. Please wait and try again later."
+  ,"password_changed_relogin":"Password changed. Please log in again with your new password."
 }

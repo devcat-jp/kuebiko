@@ -3,6 +3,7 @@
 <div class="card">
     <h2>{{if .Recipient}}{{t .Lang "recipient_edit"}}{{else}}{{t .Lang "recipient_add"}}{{end}}</h2>
     <form method="post" action="{{if .Recipient}}/recipients/edit?id={{.Recipient.ID}}{{else}}/recipients/new{{end}}">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <div class="form-group">
             <label for="name">{{t .Lang "name"}}</label>
             <input type="text" id="name" name="name" value="{{if .Recipient}}{{.Recipient.Name}}{{end}}">

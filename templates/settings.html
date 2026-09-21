@@ -5,6 +5,7 @@
 <div class="card">
     <h3>{{t .Lang "email_settings"}}</h3>
     <form method="post" action="/settings">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <div class="form-group">
             <label for="host">{{t .Lang "smtp_host"}}</label>
             <input type="text" id="host" name="host" value="{{.SMTPSettings.Host}}" required>
@@ -15,11 +16,11 @@
         </div>
         <div class="form-group">
             <label for="username">{{t .Lang "smtp_username"}}</label>
-            <input type="text" id="username" name="username" value="{{.SMTPSettings.Username}}" required>
+            <input type="text" id="username" name="username" value="{{.SMTPSettings.Username}}">
         </div>
         <div class="form-group">
             <label for="password">{{t .Lang "smtp_password"}}</label>
-            <input type="password" id="password" name="password" value="{{.SMTPSettings.Password}}" required>
+            <input type="password" id="password" name="password" value="{{.SMTPSettings.Password}}">
         </div>
         <div class="form-group">
             <label for="from_address">{{t .Lang "from_address"}}</label>
@@ -44,26 +45,27 @@
 <div class="card">
     <h3>{{t .Lang "change_password"}}</h3>
     <form method="post" action="/settings">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <input type="hidden" name="action" value="change_password">
         <div class="form-group">
             <label for="current_password">{{t .Lang "current_password"}}</label>
             <div class="password-field">
                 <input type="password" id="current_password" name="current_password" required>
-                <button type="button" class="btn btn-toggle" data-target="current_password" onclick="togglePasswordVisibility(this)">{{t .Lang "show"}}</button>
+                <button type="button" class="btn btn-toggle" data-toggle-password="current_password" data-label-show="{{t .Lang "show"}}" data-label-hide="{{t .Lang "hide"}}">{{t .Lang "show"}}</button>
             </div>
         </div>
         <div class="form-group">
             <label for="new_password">{{t .Lang "new_password"}}</label>
             <div class="password-field">
                 <input type="password" id="new_password" name="new_password" required>
-                <button type="button" class="btn btn-toggle" data-target="new_password" onclick="togglePasswordVisibility(this)">{{t .Lang "show"}}</button>
+                <button type="button" class="btn btn-toggle" data-toggle-password="new_password" data-label-show="{{t .Lang "show"}}" data-label-hide="{{t .Lang "hide"}}">{{t .Lang "show"}}</button>
             </div>
         </div>
         <div class="form-group">
             <label for="confirm_password">{{t .Lang "confirm_password"}}</label>
             <div class="password-field">
                 <input type="password" id="confirm_password" name="confirm_password" required>
-                <button type="button" class="btn btn-toggle" data-target="confirm_password" onclick="togglePasswordVisibility(this)">{{t .Lang "show"}}</button>
+                <button type="button" class="btn btn-toggle" data-toggle-password="confirm_password" data-label-show="{{t .Lang "show"}}" data-label-hide="{{t .Lang "hide"}}">{{t .Lang "show"}}</button>
             </div>
         </div>
         <button type="submit" class="btn btn-primary">{{t .Lang "change_password_action"}}</button>
@@ -73,6 +75,7 @@
 <div class="card">
     <h3>{{t .Lang "viewer_message_settings"}}</h3>
     <form method="post" action="/settings">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <input type="hidden" name="action" value="save_viewer_message">
         <div class="form-group">
             <label for="viewer_message">{{t .Lang "viewer_message"}}</label>
@@ -112,6 +115,7 @@
     </div>
 
     <form method="post" action="/settings">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <div class="form-group">
             <label for="allowed_ips">{{t .Lang "allowed_ips"}}</label>
             <input type="text" id="allowed_ips" name="allowed_ips" value="{{.AllowedIPs}}" placeholder="{{t .Lang "ip_example"}}">
@@ -127,15 +131,17 @@
     {{if .CheckInURL}}
     <div class="form-group">
         <label for="checkin-url">{{t .Lang "checkin_url"}}</label>
-        <input type="url" id="checkin-url" value="{{.CheckInURL}}" readonly onclick="this.select()">
+        <input type="url" id="checkin-url" value="{{.CheckInURL}}" readonly data-select-on-click>
     </div>
     <div class="form-actions">
-        <button type="button" class="btn btn-primary" onclick="navigator.clipboard && navigator.clipboard.writeText(document.getElementById('checkin-url').value)">{{t .Lang "copy_url"}}</button>
-        <form method="post" action="/settings/checkin" onsubmit="return confirm('{{t .Lang "regenerate_confirm"}}')">
+        <button type="button" class="btn btn-primary" data-copy-target="checkin-url">{{t .Lang "copy_url"}}</button>
+        <form method="post" action="/settings/checkin" data-confirm="{{t .Lang "regenerate_confirm"}}">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
             <input type="hidden" name="action" value="regenerate">
             <button type="submit" class="btn">{{t .Lang "regenerate_url"}}</button>
         </form>
-        <form method="post" action="/settings/checkin" onsubmit="return confirm('{{t .Lang "disable_confirm"}}')">
+        <form method="post" action="/settings/checkin" data-confirm="{{t .Lang "disable_confirm"}}">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
             <input type="hidden" name="action" value="disable">
             <button type="submit" class="btn btn-danger">{{t .Lang "disable"}}</button>
         </form>
@@ -143,6 +149,7 @@
     {{else}}
     <p class="meta">{{t .Lang "private_page_disabled_status"}}</p>
     <form method="post" action="/settings/checkin">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <input type="hidden" name="action" value="regenerate">
         <button type="submit" class="btn btn-primary">{{t .Lang "issue_private_page"}}</button>
     </form>

@@ -149,12 +149,15 @@ app/
 
 ## 6. 認証フロー
 
-1. 初回 `/setup` でユーザー名・パスワードを受け取り、bcrypt でハッシュ化して保存
-2. `/login` でユーザー名とパスワードを検証
+1. 初回 `/setup` でパスワード（8 文字以上）を受け取り、bcrypt でハッシュ化して保存
+2. `/login` でパスワードを検証
 3. 成功時、ランダムなセッショントークンを生成し DB + Cookie に保存
 4. 有効期限は 24 時間
-5. `authMiddleware` で Cookie と DB のトークンを照合
-6. `/logout` で DB のセッションをクリア
+5. `authMiddleware` で Cookie と DB のトークンを定数時間比較で照合
+6. `/logout`（POST のみ）で DB のセッションをクリア
+7. パスワード変更時はセッションを破棄し、再ログインを要求する
+
+ログイン失敗が同一 IP から 15 分間に 5 回に達すると、15 分間 429（`Retry-After` 付き）を返す。カウンタはメモリ上にのみ保持されるため、15 分の経過またはプロセス再起動で解除される（復旧手順はユーザ操作手順書のトラブルシューティングを参照）。ロックはログイン処理のみに影響し、既存セッション・秘密ページ・閲覧専用ページには影響しない。
 
 ## 7. 暗号化設計
 
@@ -176,11 +179,12 @@ encrypt(plaintext, keyB64 string) // AES-GCM + base64
 2. 指定間隔ごとに `checkTrigger()` を実行（初回は即時実行）。併せて期限切れテストリンクを削除
 3. `users.email_enabled = 1` かつ `is_triggered = 0` かつ `last_check_in_at` が存在する場合
 4. `last_check_in_at + check_in_interval_hours < now` なら作動
-5. `ClearViewerLinks()` で旧世代の閲覧リンクを削除
+5. 送信開始時の `viewer_links` 最大 ID をウォーターマークとして記録
 6. 受信者ごとにトークンを生成し `CreateViewerLink()` で保存、`publicBaseURL()` + `/view/<token>` を本文に記載
 7. `sendViewerEmail()` で受信者ごとに個別送信（本文・添付に情報を載せない）
-8. すべて成功したら `users.is_triggered = 1` に更新
-9. ユーザーが生存確認を行うと `is_triggered` が 0 にリセットされ、閲覧リンクも無効化される
+8. 全員成功した場合のみ、ウォーターマーク以下の旧リンクを `DeleteViewerLinksUpTo()` で削除し `users.is_triggered = 1` に更新
+9. 一部でも失敗した場合はリンクを削除せず終了する（配信済みリンクを無効化しないため。次回再試行で新しいリンクが追加される）
+10. ユーザーが生存確認を行うと `is_triggered` が 0 にリセットされ、閲覧リンクも無効化される
 
 ## 9. メール送信設計
 
@@ -304,7 +308,14 @@ CGO は不要（modernc.org/sqlite を使用）。
 - `APP_HOST=0.0.0.0` を指定すると LAN 全体に公開されるため、HTTPS 併用を推奨
 - パスワードは bcrypt でハッシュ化
 - 機密データは AES-GCM で暗号化（ただしキーも同 DB に保存）
-- セッション Cookie は HttpOnly
+- セッション Cookie は HttpOnly / SameSite=Lax（TLS 使用時または `APP_PUBLIC_URL` が `https://` の場合は Secure）
+- すべての POST はダブルサブミット型 CSRF トークン（Cookie + フォーム隠し項目 / `X-CSRF-Token` ヘッダー）で検証し、不一致は 403
+- 管理画面のレスポンスは `Cache-Control: no-store` とし、共有端末でのキャッシュ残留を防ぐ
+- `X-Content-Type-Options: nosniff` / `X-Frame-Options: DENY` / `Referrer-Policy: no-referrer` / nonce ベースの CSP を全レスポンスに付与（HTTPS 時のみ HSTS）
+- インラインのイベントハンドラは使用せず、`data-*` 属性 + 委譲リスナーで処理する（CSP の nonce を成立させるため）
+- POST のリクエストボディは 1 MiB に制限（超過は 413）
+- HTTP サーバーに `ReadHeaderTimeout` / `ReadTimeout` / `WriteTimeout` / `IdleTimeout` / `MaxHeaderBytes` を設定
+- リダイレクト先は `safeReturnPath()` で検証し、外部 URL や `//`・`/\` 始まりを拒否する
 - テンプレートは html/template を使用し XSS を抑制
 - Markdown レンダリングでは生の HTML を破棄し（`html.SkipHTML`）、`javascript:` / `data:` などの危険なリンクを無効化する
 - SMTP パスワードは DB に平文保存

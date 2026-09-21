@@ -81,6 +81,26 @@ nav a:hover {
     color: var(--primary);
 }
 
+/* Logout is submitted via POST (CSRF-safe) but styled like a nav link. */
+nav .logout-form {
+    display: inline;
+}
+
+nav .link-button {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    color: var(--muted);
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+nav .link-button:hover {
+    color: var(--primary);
+}
+
 .lang-switcher {
     position: relative;
     display: inline-block;

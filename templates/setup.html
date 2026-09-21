@@ -4,6 +4,7 @@
     <h2>{{t .Lang "initial_setup"}}</h2>
     <p>{{t .Lang "create_admin"}}</p>
     <form method="post" action="/setup">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <div class="form-group">
             <label for="password">{{t .Lang "password"}}</label>
             <input type="password" id="password" name="password" required autofocus>

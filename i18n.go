@@ -61,6 +61,7 @@ func setLanguageCookie(w http.ResponseWriter, lang string) {
 		MaxAge:   31536000,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   cookieSecure,
 	})
 }
 
@@ -84,9 +85,7 @@ func languageURL(lang, returnPath string) string {
 	if !isSupportedLanguage(lang) {
 		lang = "ja"
 	}
-	if !strings.HasPrefix(returnPath, "/") || strings.HasPrefix(returnPath, "//") {
-		returnPath = "/"
-	}
+	returnPath = safeReturnPath(returnPath)
 	values := url.Values{}
 	values.Set("lang", lang)
 	values.Set("return", returnPath)
@@ -109,9 +108,6 @@ func (app *App) languageHandler(w http.ResponseWriter, r *http.Request) {
 		lang = "ja"
 	}
 	setLanguageCookie(w, lang)
-	returnTo := r.URL.Query().Get("return")
-	if !strings.HasPrefix(returnTo, "/") || strings.HasPrefix(returnTo, "//") {
-		returnTo = "/"
-	}
+	returnTo := safeReturnPath(r.URL.Query().Get("return"))
 	http.Redirect(w, r, returnTo, http.StatusSeeOther)
 }

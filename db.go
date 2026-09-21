@@ -307,6 +307,23 @@ func (db *DB) ClearViewerLinks() error {
 	return err
 }
 
+// MaxViewerLinkID returns the highest viewer link row id, used to identify
+// the links created by a single trigger attempt.
+func (db *DB) MaxViewerLinkID() (int64, error) {
+	var id int64
+	err := db.conn.QueryRow("SELECT COALESCE(MAX(id), 0) FROM viewer_links").Scan(&id)
+	return id, err
+}
+
+// DeleteViewerLinksUpTo removes non-test viewer links created up to and
+// including maxID. It is used to prune links left over from earlier failed
+// trigger attempts once a complete generation has been delivered, without
+// invalidating the links that were just sent.
+func (db *DB) DeleteViewerLinksUpTo(maxID int64) error {
+	_, err := db.conn.Exec("DELETE FROM viewer_links WHERE id <= ? AND is_test = 0", maxID)
+	return err
+}
+
 // User helpers.
 func (db *DB) CreateUser(passwordHash string) error {
 	_, err := db.conn.Exec("INSERT INTO users (id, password_hash) VALUES (1, ?)", passwordHash)

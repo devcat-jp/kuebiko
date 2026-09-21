@@ -138,7 +138,12 @@ func main() {
 	mux.HandleFunc("/documents/preview", app.authMiddleware(app.documentPreviewHandler))
 	mux.HandleFunc("/documents/reorder", app.authMiddleware(app.documentsReorderHandler))
 
-	handler := languageMiddleware(ipFilter(mux, db))
+	var handler http.Handler = mux
+	handler = csrfMiddleware(handler)
+	handler = limitBody(handler)
+	handler = ipFilter(handler, db)
+	handler = languageMiddleware(handler)
+	handler = securityHeaders(handler)
 
 	host := os.Getenv("APP_HOST")
 	if host == "" {
@@ -159,13 +164,26 @@ func main() {
 	if useTLS {
 		scheme = "https"
 	}
+	// Cookies marked Secure require TLS; also honour an explicit HTTPS public
+	// URL so proxied deployments get hardened cookies.
+	cookieSecure = useTLS || strings.HasPrefix(strings.ToLower(os.Getenv("APP_PUBLIC_URL")), "https://")
+
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 16,
+	}
 	log.Printf("Application server starting on %s://%s", scheme, addr)
 	if useTLS {
-		if err := http.ListenAndServeTLS(addr, certFile, keyFile, handler); err != nil {
+		if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil {
 			log.Fatalf("server error: %v", err)
 		}
 	} else {
-		if err := http.ListenAndServe(addr, handler); err != nil {
+		if err := srv.ListenAndServe(); err != nil {
 			log.Fatalf("server error: %v", err)
 		}
 	}
@@ -217,6 +235,7 @@ func (app *App) renderViewer(w http.ResponseWriter, r *http.Request, name string
 	data.RequestPath = r.URL.RequestURI()
 	data.AppName = applicationName
 	data.ClientIP = clientIP(r)
+	data.CSPNonce = cspNonceFromContext(r.Context())
 	base := strings.TrimSuffix(name, ".html")
 	var titleBuf, contentBuf bytes.Buffer
 	if err := app.templates.ExecuteTemplate(&titleBuf, base+"_title", data); err != nil {
@@ -247,6 +266,8 @@ func (app *App) render(w http.ResponseWriter, r *http.Request, name string, data
 	data.RequestPath = r.URL.RequestURI()
 	data.AppName = applicationName
 	data.ClientIP = clientIP(r)
+	data.CSPNonce = cspNonceFromContext(r.Context())
+	data.CSRFToken = csrfToken(w, r)
 	flash, flashType := getFlash(w, r)
 	if parts := strings.SplitN(flash, "|", 2); len(parts) == 2 {
 		data.Flash = translate(data.Lang, parts[0]) + parts[1]
@@ -374,6 +395,11 @@ func (app *App) setupHandler(w http.ResponseWriter, r *http.Request) {
 			app.render(w, r, "setup.html", nil)
 			return
 		}
+		if !validatePassword(password) {
+			setFlash(w, "password_too_short", "error")
+			app.render(w, r, "setup.html", nil)
+			return
+		}
 		if password != confirm {
 			setFlash(w, "password_mismatch", "error")
 			app.render(w, r, "setup.html", nil)
@@ -417,12 +443,22 @@ func (app *App) loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodPost {
+		ipKey := clientIP(r)
+		if loginBlocked(ipKey) {
+			setFlash(w, "too_many_attempts", "error")
+			w.Header().Set("Retry-After", strconv.Itoa(int(loginBlockDuration.Seconds())))
+			w.WriteHeader(http.StatusTooManyRequests)
+			app.render(w, r, "login.html", nil)
+			return
+		}
 		password := r.FormValue("password")
 		if !checkPassword(password, user.PasswordHash) {
+			registerLoginFailure(ipKey)
 			setFlash(w, "incorrect_password", "error")
 			app.render(w, r, "login.html", nil)
 			return
 		}
+		resetLoginFailures(ipKey)
 		token, err := generateSessionToken()
 		if err != nil {
 			setFlash(w, "generic_error", "error")
@@ -435,13 +471,7 @@ func (app *App) loginHandler(w http.ResponseWriter, r *http.Request) {
 			app.render(w, r, "login.html", nil)
 			return
 		}
-		http.SetCookie(w, &http.Cookie{
-			Name:     sessionCookieName,
-			Value:    token,
-			Expires:  expires,
-			HttpOnly: true,
-			Path:     "/",
-		})
+		setSessionCookie(w, token, expires)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
@@ -449,14 +479,14 @@ func (app *App) loginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) logoutHandler(w http.ResponseWriter, r *http.Request) {
+	// Logout is a state-changing action and must not be triggerable by a
+	// cross-site GET (e.g. <img src="/logout">).
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	_ = app.db.ClearSession()
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
-		Value:    "",
-		Expires:  time.Unix(0, 0),
-		HttpOnly: true,
-		Path:     "/",
-	})
+	clearSessionCookie(w)
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
@@ -579,7 +609,7 @@ func (app *App) viewerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	base := "/view/" + token
 	if len(parts) == 1 {
-		http.SetCookie(w, &http.Cookie{Name: "viewer_seen", Value: token, Path: base, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+		http.SetCookie(w, &http.Cookie{Name: "viewer_seen", Value: token, Path: base, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: cookieSecure})
 		message, _ := app.db.GetViewerMessage()
 		app.renderViewer(w, r, "viewer_message.html", &AppData{ViewerMode: true, ViewerToken: token, ViewerMessage: message})
 		return
@@ -740,6 +770,11 @@ func (app *App) settingsHandler(w http.ResponseWriter, r *http.Request) {
 				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, AllowedIPsEnv: allowedIPsEnv != "", CheckInURL: checkInURLValue})
 				return
 			}
+			if !validatePassword(newPassword) {
+				setFlash(w, "password_too_short", "error")
+				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, AllowedIPsEnv: allowedIPsEnv != "", CheckInURL: checkInURLValue})
+				return
+			}
 			if !checkPassword(currentPassword, user.PasswordHash) {
 				setFlash(w, "current_password_incorrect", "error")
 				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, AllowedIPsEnv: allowedIPsEnv != "", CheckInURL: checkInURLValue})
@@ -761,8 +796,12 @@ func (app *App) settingsHandler(w http.ResponseWriter, r *http.Request) {
 				app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: allowedIPs, AllowedIPsEnv: allowedIPsEnv != "", CheckInURL: checkInURLValue})
 				return
 			}
-			setFlash(w, "password_changed", "success")
-			http.Redirect(w, r, "/settings", http.StatusSeeOther)
+			// Invalidate every existing session so a stolen cookie cannot
+			// survive a password change. The user must log in again.
+			_ = app.db.ClearSession()
+			clearSessionCookie(w)
+			setFlash(w, "password_changed_relogin", "success")
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
 
@@ -774,7 +813,7 @@ func (app *App) settingsHandler(w http.ResponseWriter, r *http.Request) {
 		useTLS := r.FormValue("use_tls") == "1"
 		enabled := r.FormValue("email_enabled") == "1"
 		newAllowedIPs := strings.TrimSpace(r.FormValue("allowed_ips"))
-		if host == "" || port == 0 || username == "" || from == "" {
+		if host == "" || port == 0 || from == "" {
 			setFlash(w, "smtp_required", "error")
 			app.render(w, r, "settings.html", &AppData{User: user, SMTPSettings: settings, AllowedIPs: newAllowedIPs, AllowedIPsEnv: allowedIPsEnv != "", CheckInURL: checkInURLValue})
 			return
@@ -1363,28 +1402,43 @@ func (app *App) checkTrigger() {
 		log.Println("overdue check-in detected but no recipients configured")
 		return
 	}
-	// Replace any links from a previous failed/incomplete attempt before
-	// issuing a fresh generation of recipient-specific links.
-	if err := app.db.ClearViewerLinks(); err != nil {
-		log.Printf("failed to clear viewer links: %v", err)
+	// Record the id watermark so that a later successful attempt can prune
+	// links left over from incomplete attempts. Links already delivered by an
+	// earlier partial attempt stay valid until then, so a retry no longer
+	// invalidates a URL a recipient has already received.
+	watermark, err := app.db.MaxViewerLinkID()
+	if err != nil {
+		log.Printf("failed to read viewer link watermark: %v", err)
 		return
 	}
 	log.Printf("Overdue action triggered, sending viewer links to %d recipient(s)", len(recipients))
+	allSent := true
 	for _, recipient := range recipients {
 		token, err := generateViewerToken()
 		if err != nil {
 			log.Printf("failed to generate viewer token: %v", err)
-			return
+			allSent = false
+			continue
 		}
 		if err := app.db.CreateViewerLink(recipient.ID, token); err != nil {
 			log.Printf("failed to save viewer link: %v", err)
-			return
+			allSent = false
+			continue
 		}
 		viewerURL := publicBaseURL(nil) + "/view/" + token
 		if err := app.sendViewerEmail(recipient, viewerURL); err != nil {
 			log.Printf("failed to send viewer email to recipient %d: %v", recipient.ID, err)
-			return
+			allSent = false
 		}
+	}
+	if !allSent {
+		// Keep every link valid (including ones already delivered) so the
+		// next attempt can retry the failed recipients.
+		return
+	}
+	// The full generation is delivered; drop the earlier partial attempts.
+	if err := app.db.DeleteViewerLinksUpTo(watermark); err != nil {
+		log.Printf("failed to prune old viewer links: %v", err)
 	}
 	if err := app.db.MarkTriggered(); err != nil {
 		log.Printf("failed to mark triggered: %v", err)

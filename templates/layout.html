@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{.CSRFToken}}">
     <title>{{.Title}} - {{.AppName}}</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -20,7 +21,10 @@
                 <a href="/documents">{{t .Lang "memos"}}</a>
                 <a href="/recipients">{{t .Lang "recipients"}}</a>
                 <a href="/settings">{{t .Lang "settings"}}</a>
-                <a href="/logout">{{t .Lang "logout"}}</a>
+                <form method="post" action="/logout" class="logout-form">
+                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                    <button type="submit" class="link-button">{{t .Lang "logout"}}</button>
+                </form>
                 <div class="lang-switcher">
                     <button class="lang-switcher-button" type="button" aria-haspopup="true" aria-expanded="false">
                         <span class="lang-switcher-globe" aria-hidden="true">🌐</span>
@@ -59,7 +63,42 @@
     <footer class="container">
         <p>{{t .Lang "local_only"}} {{.AppName}}</p>
     </footer>
-    <script>
+    <script nonce="{{.CSPNonce}}">
+        // Delegated handlers replace inline event attributes so that the
+        // Content-Security-Policy can forbid inline script entirely.
+        document.addEventListener('click', function (e) {
+            var reveal = e.target.closest('[data-reveal]');
+            if (reveal) {
+                var input = reveal.parentElement.querySelector('.secret-input');
+                if (input) {
+                    if (input.type === 'password') { input.type = 'text'; reveal.textContent = '\ud83d\ude48'; }
+                    else { input.type = 'password'; reveal.textContent = '\ud83d\udc41'; }
+                }
+            }
+            var pw = e.target.closest('[data-toggle-password]');
+            if (pw) {
+                var target = document.getElementById(pw.getAttribute('data-toggle-password'));
+                if (target) {
+                    var shown = target.type === 'text';
+                    target.type = shown ? 'password' : 'text';
+                    pw.textContent = shown ? pw.getAttribute('data-label-show') : pw.getAttribute('data-label-hide');
+                }
+            }
+            var copy = e.target.closest('[data-copy-target]');
+            if (copy) {
+                var src = document.getElementById(copy.getAttribute('data-copy-target'));
+                if (src && navigator.clipboard) { navigator.clipboard.writeText(src.value); }
+            }
+            var select = e.target.closest('[data-select-on-click]');
+            if (select) { select.select(); }
+        });
+        document.addEventListener('submit', function (e) {
+            var form = e.target.closest('form[data-confirm]');
+            if (form && !window.confirm(form.getAttribute('data-confirm'))) {
+                e.preventDefault();
+            }
+        });
+
         function togglePasswordVisibility(button) {
             var targetId = button.getAttribute('data-target');
             var input = document.getElementById(targetId);
@@ -112,9 +151,13 @@
                 rows.forEach(function (row) {
                     params.append('id', row.getAttribute('data-id'));
                 });
+                var csrfMeta = document.querySelector('meta[name="csrf-token"]');
                 fetch(url, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRF-Token': csrfMeta ? csrfMeta.getAttribute('content') : ''
+                    },
                     body: params.toString()
                 }).catch(function (err) {
                     console.error('{{t .Lang "reorder_save_failed"}}', err);

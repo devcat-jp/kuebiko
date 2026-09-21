@@ -144,6 +144,8 @@ type AppData struct {
 	ViewerToken         string
 	PublicURL           string
 	ViewerMessage       string
+	CSRFToken           string
+	CSPNonce            string
 	Title               template.HTML
 	Content             template.HTML
 }

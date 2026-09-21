@@ -24,6 +24,7 @@
 <div class="card">
     <h3>{{t .Lang "checkin"}}</h3>
     <form method="post" action="/checkin">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <div class="form-group">
             <label for="interval">{{t .Lang "next_interval"}}</label>
             <input type="number" id="interval" name="interval" value="{{.User.CheckInIntervalHours}}" min="1" required>

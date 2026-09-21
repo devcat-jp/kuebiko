@@ -3,6 +3,7 @@
 <div class="card">
     <h2>{{if .Document}}{{t .Lang "memo_edit"}}{{else}}{{t .Lang "memo_add"}}{{end}}</h2>
     <form method="post" action="{{if .Document}}/documents/edit?id={{.Document.ID}}{{else}}/documents/new{{end}}">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <div class="form-group">
             <label for="title">{{t .Lang "title"}}</label>
             <input type="text" id="title" name="title" value="{{if .Document}}{{.Document.Title}}{{end}}" required>

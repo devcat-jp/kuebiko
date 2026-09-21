@@ -7,10 +7,12 @@
     <h3>{{t .Lang "test_email_title"}}</h3>
     <p>{{t .Lang "test_email_description"}}</p>
     <div class="form-actions">
-        <form method="post" action="/recipients/test-email?id=all" onsubmit="return confirm('{{t .Lang "test_email_all_confirm"}}');">
+        <form method="post" action="/recipients/test-email?id=all" data-confirm="{{t .Lang "test_email_all_confirm"}}">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
             <button type="submit" class="btn btn-primary">{{t .Lang "send_test_to_all"}}</button>
         </form>
         <form method="post" action="/recipients/test-email/clear">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
             <button type="submit" class="btn">{{t .Lang "clear_test_links"}}</button>
         </form>
     </div>
@@ -31,10 +33,12 @@
             <td>{{.Email}}</td>
             <td>
                 <a href="/recipients/edit?id={{.ID}}" class="btn btn-small">{{t $.Lang "edit"}}</a>
-                <form method="post" action="/recipients/test-email?id={{.ID}}" style="display:inline" onsubmit="return confirm('{{t $.Lang "test_email_confirm"}}');">
+                <form method="post" action="/recipients/test-email?id={{.ID}}" style="display:inline" data-confirm="{{t $.Lang "test_email_confirm"}}">
+                    <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
                     <button type="submit" class="btn btn-small">{{t $.Lang "send_test_email"}}</button>
                 </form>
-                <form method="post" action="/recipients/delete?id={{.ID}}" style="display:inline" onsubmit="return confirm('{{t $.Lang "delete_confirm"}}');">
+                <form method="post" action="/recipients/delete?id={{.ID}}" style="display:inline" data-confirm="{{t $.Lang "delete_confirm"}}">
+                    <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
                     <button type="submit" class="btn btn-danger btn-small">{{t $.Lang "delete"}}</button>
                 </form>
             </td>
