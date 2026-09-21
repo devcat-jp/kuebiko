@@ -1,0 +1,24 @@
+# Git
+.git
+.gitignore
+.github
+
+# Local data (mounted via compose.yaml)
+data/
+
+# Local configuration
+.env
+
+# Build artifacts
+kuebiko
+*.exe
+
+# Docs not needed in image
+docs/
+README.md
+
+# Editor / OS
+.vscode/
+*.swp
+*~
+.DS_Store

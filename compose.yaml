@@ -1,0 +1,14 @@
+services:
+  kuebiko:
+    build: .
+    image: kuebiko:latest
+    container_name: kuebiko
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      # SQLite データはリポジトリ直下の data/ に永続化（bind mount）
+      - ./data:/data
+    env_file: .env
+    security_opt:
+      - no-new-privileges:true
