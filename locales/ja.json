@@ -151,5 +151,11 @@
   "from_address_invalid": "送信元アドレスの形式が正しくありません。",
   "move_up": "上へ移動",
   "move_down": "下へ移動",
-  "language_menu": "言語を選択"
+  "language_menu": "言語を選択",
+  "attachments": "添付ファイル",
+  "add_attachment": "添付ファイルを追加",
+  "check_to_delete": "チェックで削除",
+  "attachment_limit_hint": "1ファイルあたり最大30MB・1情報あたり最大20件まで登録できます。形式の制限はありません。",
+  "attachment_failed": "添付ファイルの保存に失敗しました。サイズ上限を超えていないか確認してください。",
+  "attachment_deleted": "添付ファイルを削除しました"
 }

@@ -45,6 +45,20 @@ func encrypt(plaintext, keyB64 string) (string, error) {
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
+// decryptBytes decrypts a base64 ciphertext into raw bytes.
+func decryptBytes(ciphertextB64, keyB64 string) ([]byte, error) {
+	pt, err := decrypt(ciphertextB64, keyB64)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(pt), nil
+}
+
+// encryptBytes encrypts raw bytes with AES-GCM and returns base64 ciphertext.
+func encryptBytes(plaintext []byte, keyB64 string) (string, error) {
+	return encrypt(string(plaintext), keyB64)
+}
+
 // decrypt decrypts a base64 ciphertext with AES-GCM using the provided base64 key.
 func decrypt(ciphertextB64, keyB64 string) (string, error) {
 	key, err := decodeKey(keyB64)

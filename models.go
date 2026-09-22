@@ -135,6 +135,7 @@ type AppData struct {
 	Documents           []Document
 	Secret              *Secret
 	SecretPayload       *SecretPayload
+	Attachments         []Attachment
 	Document            *Document
 	Recipient           *Recipient
 	Deadline            *time.Time

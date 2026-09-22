@@ -189,4 +189,10 @@
   ,"move_up":"Move up"
   ,"move_down":"Move down"
   ,"language_menu":"Select language"
+  ,"attachments":"Attachments"
+  ,"add_attachment":"Add attachment"
+  ,"check_to_delete":"Check to delete"
+  ,"attachment_limit_hint":"Up to 30 MB per file, up to 20 files per entry. No file type restrictions."
+  ,"attachment_failed":"Failed to save attachments. Check the size limit."
+  ,"attachment_deleted":"Attachment deleted"
 }

@@ -118,6 +118,7 @@ func main() {
 	mux.HandleFunc("/secrets/delete", app.authMiddleware(app.secretDeleteHandler))
 	mux.HandleFunc("/secrets/view", app.authMiddleware(app.secretViewHandler))
 	mux.HandleFunc("/secrets/reorder", app.authMiddleware(app.secretsReorderHandler))
+	mux.HandleFunc("/secrets/attachment", app.authMiddleware(app.attachmentDownloadHandler))
 	mux.HandleFunc("/insurance", app.authMiddleware(app.insuranceHandler))
 	mux.HandleFunc("/insurance/new", app.authMiddleware(app.insuranceNewHandler))
 	mux.HandleFunc("/insurance/edit", app.authMiddleware(app.insuranceEditHandler))
@@ -626,6 +627,22 @@ func (app *App) viewerHandler(w http.ResponseWriter, r *http.Request) {
 			app.renderViewer(w, r, "viewer_secrets.html", &AppData{ViewerMode: true, ViewerToken: token, Secrets: list, Category: categoryDB})
 			return
 		}
+		if len(parts) == 3 && parts[2] == "attachment" {
+			id, _ := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
+			secret, _ := app.db.GetSecretByCategory(id, categoryDB)
+			if secret == nil {
+				http.NotFound(w, r)
+				return
+			}
+			attID, _ := strconv.ParseInt(r.URL.Query().Get("att"), 10, 64)
+			att, err := app.db.GetAttachment(attID, secret.ID)
+			if err != nil || att == nil {
+				http.NotFound(w, r)
+				return
+			}
+			app.writeAttachment(w, att)
+			return
+		}
 		if len(parts) == 3 && parts[2] == "view" {
 			id, _ := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
 			secret, _ := app.db.GetSecretByCategory(id, categoryDB)
@@ -634,7 +651,8 @@ func (app *App) viewerHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			payload, _ := secret.ParseSecretPayload()
-			app.renderViewer(w, r, "viewer_secret_view.html", &AppData{ViewerMode: true, ViewerToken: token, Secret: secret, SecretPayload: payload, Category: categoryDB})
+			atts, _ := app.db.ListAttachments(secret.ID)
+			app.renderViewer(w, r, "viewer_secret_view.html", &AppData{ViewerMode: true, ViewerToken: token, Secret: secret, SecretPayload: payload, Category: categoryDB, Attachments: atts})
 			return
 		}
 	case "documents":
@@ -1162,6 +1180,9 @@ func (app *App) secretNewByCategoryHandler(w http.ResponseWriter, r *http.Reques
 		app.render(w, r, "secret_form.html", &AppData{Category: category})
 		return
 	}
+	if err := r.ParseMultipartForm(maxAttachmentSize); err != nil && err != http.ErrNotMultipart {
+		log.Printf("failed to parse secret form: %v", err)
+	}
 	title := strings.TrimSpace(r.FormValue("title"))
 	if title == "" {
 		setFlash(w, "title_required", "error")
@@ -1180,12 +1201,18 @@ func (app *App) secretNewByCategoryHandler(w http.ResponseWriter, r *http.Reques
 		app.render(w, r, "secret_form.html", &AppData{Category: category})
 		return
 	}
-	if err := app.db.CreateSecretInCategory(category, title, string(content)); err != nil {
+	secretID, err := app.db.CreateSecretInCategory(category, title, string(content))
+	if err != nil {
 		setFlash(w, "add_failed", "error")
 		app.render(w, r, "secret_form.html", &AppData{Category: category})
 		return
 	}
-	setFlash(w, "secret_added", "success")
+	if err := app.saveFormAttachments(secretID, r); err != nil {
+		log.Printf("failed to save attachments: %v", err)
+		setFlash(w, "attachment_failed", "error")
+	} else {
+		setFlash(w, "secret_added", "success")
+	}
 	http.Redirect(w, r, app.secretCategoryPath(category), http.StatusSeeOther)
 }
 
@@ -1202,8 +1229,12 @@ func (app *App) secretEditByCategoryHandler(w http.ResponseWriter, r *http.Reque
 	}
 	if r.Method == http.MethodGet {
 		payload, _ := secret.ParseSecretPayload()
-		app.render(w, r, "secret_form.html", &AppData{Secret: secret, SecretPayload: payload, Category: category})
+		atts, _ := app.db.ListAttachments(secret.ID)
+		app.render(w, r, "secret_form.html", &AppData{Secret: secret, SecretPayload: payload, Category: category, Attachments: atts})
 		return
+	}
+	if err := r.ParseMultipartForm(maxAttachmentSize); err != nil && err != http.ErrNotMultipart {
+		log.Printf("failed to parse secret form: %v", err)
 	}
 	title := strings.TrimSpace(r.FormValue("title"))
 	if title == "" {
@@ -1226,7 +1257,16 @@ func (app *App) secretEditByCategoryHandler(w http.ResponseWriter, r *http.Reque
 	if err := app.db.UpdateSecretInCategory(id, category, title, string(content)); err != nil {
 		setFlash(w, "update_failed", "error")
 	} else {
-		setFlash(w, "secret_updated", "success")
+		attErr := app.processAttachmentRemovals(id, r)
+		if attErr == nil {
+			attErr = app.saveFormAttachments(id, r)
+		}
+		if attErr != nil {
+			log.Printf("failed to save attachments: %v", attErr)
+			setFlash(w, "attachment_failed", "error")
+		} else {
+			setFlash(w, "secret_updated", "success")
+		}
 	}
 	http.Redirect(w, r, app.secretCategoryPath(category), http.StatusSeeOther)
 }
@@ -1243,7 +1283,8 @@ func (app *App) secretViewByCategoryHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	payload, _ := secret.ParseSecretPayload()
-	app.render(w, r, "secret_view.html", &AppData{Secret: secret, SecretPayload: payload, Category: category})
+	atts, _ := app.db.ListAttachments(secret.ID)
+	app.render(w, r, "secret_view.html", &AppData{Secret: secret, SecretPayload: payload, Category: category, Attachments: atts})
 }
 
 func (app *App) secretDeleteHandler(w http.ResponseWriter, r *http.Request) {

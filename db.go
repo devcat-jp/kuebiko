@@ -111,6 +111,17 @@ CREATE TABLE IF NOT EXISTS viewer_links (
 	is_test INTEGER NOT NULL DEFAULT 0,
 	FOREIGN KEY (recipient_id) REFERENCES recipients(id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS attachments (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	secret_id INTEGER NOT NULL,
+	filename TEXT NOT NULL,
+	mime_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+	size INTEGER NOT NULL DEFAULT 0,
+	data TEXT NOT NULL,
+	sort_order INTEGER NOT NULL DEFAULT 0,
+	created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (secret_id) REFERENCES secrets(id) ON DELETE CASCADE
+);
 `
 	if _, err := db.conn.Exec(schema); err != nil {
 		return err
@@ -540,17 +551,24 @@ func (db *DB) GetSecretByCategory(id int64, category string) (*Secret, error) {
 	return s, nil
 }
 
-func (db *DB) CreateSecret(title, content string) error {
+func (db *DB) CreateSecret(title, content string) (int64, error) {
 	return db.CreateSecretInCategory("financial", title, content)
 }
 
-func (db *DB) CreateSecretInCategory(category, title, content string) error {
+func (db *DB) CreateSecretInCategory(category, title, content string) (int64, error) {
 	ct, err := encrypt(content, db.key)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	_, err = db.conn.Exec("INSERT INTO secrets (category, title, content, sort_order) VALUES (?, ?, ?, COALESCE((SELECT MAX(sort_order)+1 FROM secrets WHERE category = ?), 0))", category, title, ct, category)
-	return err
+	res, err := db.conn.Exec("INSERT INTO secrets (category, title, content, sort_order) VALUES (?, ?, ?, COALESCE((SELECT MAX(sort_order)+1 FROM secrets WHERE category = ?), 0))", category, title, ct, category)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
 }
 
 func (db *DB) UpdateSecret(id int64, title, content string) error {
@@ -584,6 +602,20 @@ func (db *DB) DeleteSecret(id int64) error {
 func (db *DB) DeleteSecretInCategory(id int64, category string) error {
 	_, err := db.conn.Exec("DELETE FROM secrets WHERE id = ? AND category = ?", id, category)
 	return err
+}
+
+// GetSecretAnyCategory returns the secret regardless of its category.
+func (db *DB) GetSecretAnyCategory(id int64) (*Secret, error) {
+	for _, c := range []string{"financial", "insurance", "subscription"} {
+		s, err := db.GetSecretByCategory(id, c)
+		if err != nil {
+			return nil, err
+		}
+		if s != nil {
+			return s, nil
+		}
+	}
+	return nil, nil
 }
 
 // Document helpers (encrypted at rest).
