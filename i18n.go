@@ -93,13 +93,17 @@ func languageURL(lang, returnPath string) string {
 }
 
 func translate(lang, key string) string {
-	if value := translations[lang][key]; value != "" {
-		return value
+	value := ""
+	if v := translations[lang][key]; v != "" {
+		value = v
+	} else if v := translations["ja"][key]; v != "" {
+		value = v
+	} else {
+		return key
 	}
-	if value := translations["ja"][key]; value != "" {
-		return value
-	}
-	return key
+	// Locale strings may reference the application name, which is fixed at
+	// build time via the applicationName constant.
+	return strings.ReplaceAll(value, "{{.AppName}}", applicationName)
 }
 
 func (app *App) languageHandler(w http.ResponseWriter, r *http.Request) {
